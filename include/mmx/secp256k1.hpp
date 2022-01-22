@@ -10,10 +10,11 @@
 
 #include <secp256k1.h>
 
+#include <mmx_iface_export.h>
 
 namespace mmx {
 
-extern const secp256k1_context* g_secp256k1;
+MMX_IFACE_EXPORT extern const secp256k1_context* g_secp256k1;
 
 void secp256k1_init();
 
