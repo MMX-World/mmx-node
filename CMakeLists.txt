@@ -17,7 +17,10 @@ add_subdirectory(vnx-rocksdb)
 add_subdirectory(libbech32)
 add_subdirectory(bls-signatures)
 
+if (NOT MSVC)
 find_package(OpenCL)
+endif()
+
 find_package(Threads REQUIRED)
 
 include(cmake/chiapos.cmake)
@@ -109,12 +112,16 @@ target_include_directories(mmx_iface
 		generated/solution/include
 )
 
-target_include_directories(mmx_iface PUBLIC ${VNXBASE_BINARY_DIR})
-
 target_include_directories(mmx_chiapos
-	PUBLIC src/chiapos
-	PRIVATE chiapos/src chiapos/lib/include
+	PUBLIC 
+		src/chiapos 
+	PRIVATE 
+		chiapos/src 
+		chiapos/lib/include 
+		uint256_t
 )
+
+target_include_directories(mmx_iface PUBLIC ${VNXBASE_BINARY_DIR})
 
 target_link_libraries(mmx_iface uint256_t secp256k1 bech32 bls vnx_addons vnx_base)
 target_link_libraries(mmx_modules vnx_rocksdb mmx_chiapos mmx_iface)
