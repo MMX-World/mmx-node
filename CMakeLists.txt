@@ -87,6 +87,11 @@ add_library(mmx_modules SHARED
 	src/OCL_VDF.cpp
 )
 
+target_include_directories(mmx_modules
+	PUBLIC 
+		${AUTOMY_BASIC_OPENCL_BINARY_DIR}
+)
+
 add_library(uint256_t STATIC
 	uint256_t/uint128_t.cpp
 	uint256_t/uint256_t.cpp
