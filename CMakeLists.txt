@@ -85,6 +85,10 @@ add_library(mmx_iface SHARED
 	src/operation/Mutate.cpp
 )
 
+include(GenerateExportHeader)
+GENERATE_EXPORT_HEADER(mmx_iface)
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")	
+	
 add_library(mmx_modules SHARED
 	src/TimeLord.cpp
 	src/Node.cpp
