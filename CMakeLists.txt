@@ -109,6 +109,7 @@ target_include_directories(mmx_iface
 		generated/solution/include
 )
 
+target_include_directories(mmx_iface PUBLIC ${VNXBASE_BINARY_DIR})
 
 target_include_directories(mmx_chiapos
 	PUBLIC src/chiapos
