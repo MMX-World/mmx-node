@@ -59,6 +59,7 @@ target_include_directories(uint256_t PUBLIC uint256_t)
 
 
 add_library(mmx_iface SHARED
+	$<TARGET_OBJECTS:uint256_t>
 	${GENERATED_SOURCE_FILES}
 	src/Block.cpp
 	src/BlockHeader.cpp
@@ -90,6 +91,7 @@ GENERATE_EXPORT_HEADER(mmx_iface)
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")	
 	
 add_library(mmx_modules SHARED
+	$<TARGET_OBJECTS:uint256_t>
 	src/TimeLord.cpp
 	src/Node.cpp
 	src/Node_update.cpp
@@ -114,6 +116,7 @@ target_include_directories(mmx_iface
 		generated/contract/include
 		generated/operation/include
 		generated/solution/include
+		uint256_t
 )
 
 target_include_directories(mmx_chiapos
@@ -149,7 +152,7 @@ target_link_libraries(mmx_wallet mmx_modules)
 target_link_libraries(mmx_timelord mmx_modules)
 target_link_libraries(mmx_harvester mmx_modules)
 
-add_executable(tx_bench src/tx_bench.cpp)
+add_executable(tx_bench src/tx_bench.cpp $<TARGET_OBJECTS:uint256_t>)
 
 target_link_libraries(tx_bench mmx_iface)
 
