@@ -47,6 +47,14 @@ file(GLOB GENERATED_SOURCE_FILES
 	generated/solution/src/*.cpp
 )
 
+add_library(uint256_t OBJECT
+	uint256_t/uint128_t.cpp
+	uint256_t/uint256_t.cpp
+)
+
+target_include_directories(uint256_t PUBLIC uint256_t)
+
+
 add_library(mmx_iface SHARED
 	${GENERATED_SOURCE_FILES}
 	src/Block.cpp
@@ -92,11 +100,6 @@ target_include_directories(mmx_modules
 		${AUTOMY_BASIC_OPENCL_BINARY_DIR}
 )
 
-add_library(uint256_t STATIC
-	uint256_t/uint128_t.cpp
-	uint256_t/uint256_t.cpp
-)
-
 target_include_directories(mmx_iface
 	PUBLIC
 		include
@@ -106,7 +109,6 @@ target_include_directories(mmx_iface
 		generated/solution/include
 )
 
-target_include_directories(uint256_t PUBLIC uint256_t)
 
 target_include_directories(mmx_chiapos
 	PUBLIC src/chiapos
