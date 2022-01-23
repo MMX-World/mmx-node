@@ -89,7 +89,12 @@ add_library(mmx_iface SHARED
 include(GenerateExportHeader)
 GENERATE_EXPORT_HEADER(mmx_iface)
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")	
-	
+
+if(MSVC)
+	set_target_properties(mmx_iface PROPERTIES ENABLE_EXPORTS 1)
+	set_target_properties(mmx_iface PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)	
+endif()
+
 add_library(mmx_modules SHARED
 	$<TARGET_OBJECTS:uint256_t>
 	src/TimeLord.cpp
@@ -130,6 +135,21 @@ target_include_directories(mmx_chiapos
 
 target_include_directories(mmx_iface PUBLIC ${VNXBASE_BINARY_DIR})
 
+if(MSVC)
+	
+	find_library(secp256k1_LIBRARY secp256k1 HINTS ${secp256k1_LIBRARIES})
+	add_library(secp256k1 INTERFACE IMPORTED)
+	set_target_properties(secp256k1 PROPERTIES INTERFACE_LINK_LIBRARIES "${secp256k1_LIBRARY}")
+	target_include_directories(mmx_iface PUBLIC ${secp256k1_INCLUDE_DIR})
+
+	set_target_properties(mmx_iface PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
+	set_target_properties(mmx_modules PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
+
+	set_target_properties(mmx_modules PROPERTIES ENABLE_EXPORTS 1)
+	set_target_properties(mmx_modules PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)	
+
+endif()
+
 target_link_libraries(mmx_iface uint256_t secp256k1 bech32 bls vnx_addons vnx_base)
 target_link_libraries(mmx_modules vnx_rocksdb mmx_chiapos mmx_iface)
 
@@ -144,6 +164,9 @@ add_executable(mmx_farmer src/mmx_farmer.cpp)
 add_executable(mmx_wallet src/mmx_wallet.cpp)
 add_executable(mmx_timelord src/mmx_timelord.cpp)
 add_executable(mmx_harvester src/mmx_harvester.cpp)
+if(MSVC)
+set_target_properties(mmx PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
+endif()
 
 target_link_libraries(mmx mmx_iface)
 target_link_libraries(mmx_node mmx_modules)
