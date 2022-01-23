@@ -86,11 +86,11 @@ add_library(mmx_iface SHARED
 	src/operation/Mutate.cpp
 )
 
-include(GenerateExportHeader)
-GENERATE_EXPORT_HEADER(mmx_iface)
-include_directories("${CMAKE_CURRENT_BINARY_DIR}")	
 
 if(MSVC)
+	include(GenerateExportHeader)
+	GENERATE_EXPORT_HEADER(mmx_iface)
+	include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 	set_target_properties(mmx_iface PROPERTIES ENABLE_EXPORTS 1)
 	set_target_properties(mmx_iface PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)	
 endif()
@@ -109,10 +109,6 @@ add_library(mmx_modules SHARED
 	src/OCL_VDF.cpp
 )
 
-target_include_directories(mmx_modules
-	PUBLIC 
-		${AUTOMY_BASIC_OPENCL_BINARY_DIR}
-)
 
 target_include_directories(mmx_iface
 	PUBLIC
@@ -133,9 +129,10 @@ target_include_directories(mmx_chiapos
 		uint256_t
 )
 
-target_include_directories(mmx_iface PUBLIC ${VNXBASE_BINARY_DIR})
-
 if(MSVC)
+
+	target_include_directories(mmx_modules PUBLIC ${AUTOMY_BASIC_OPENCL_BINARY_DIR})
+	target_include_directories(mmx_iface PUBLIC ${VNXBASE_BINARY_DIR})
 	
 	find_library(secp256k1_LIBRARY secp256k1 HINTS ${secp256k1_LIBRARIES})
 	add_library(secp256k1 INTERFACE IMPORTED)
@@ -164,8 +161,9 @@ add_executable(mmx_farmer src/mmx_farmer.cpp)
 add_executable(mmx_wallet src/mmx_wallet.cpp)
 add_executable(mmx_timelord src/mmx_timelord.cpp)
 add_executable(mmx_harvester src/mmx_harvester.cpp)
+
 if(MSVC)
-set_target_properties(mmx PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
+	set_target_properties(mmx PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
 endif()
 
 target_link_libraries(mmx mmx_iface)

@@ -10,7 +10,11 @@
 
 #include <secp256k1.h>
 
+#ifdef _MSC_VER
 #include <mmx_iface_export.h>
+#else
+#define MMX_IFACE_EXPORT
+#endif
 
 namespace mmx {
 
