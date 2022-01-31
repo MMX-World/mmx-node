@@ -74,7 +74,7 @@ void Node::validate(std::shared_ptr<const Block> block) const
 	std::atomic<uint64_t> total_cost {0};
 
 #pragma omp parallel for
-	for(size_t i = 0; i < block->tx_list.size(); ++i)
+	for(int32_t i = 0; i < block->tx_list.size(); ++i)
 	{
 		const auto& base = block->tx_list[i];
 		try {

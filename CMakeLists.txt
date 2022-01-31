@@ -17,7 +17,10 @@ add_subdirectory(vnx-rocksdb)
 add_subdirectory(libbech32)
 add_subdirectory(bls-signatures)
 
+if (NOT MSVC)
 find_package(OpenCL)
+endif()
+
 find_package(Threads REQUIRED)
 
 include(cmake/chiapos.cmake)
@@ -47,7 +50,16 @@ file(GLOB GENERATED_SOURCE_FILES
 	generated/solution/src/*.cpp
 )
 
+add_library(uint256_t OBJECT
+	uint256_t/uint128_t.cpp
+	uint256_t/uint256_t.cpp
+)
+
+target_include_directories(uint256_t PUBLIC uint256_t)
+
+
 add_library(mmx_iface SHARED
+	$<TARGET_OBJECTS:uint256_t>
 	${GENERATED_SOURCE_FILES}
 	src/Block.cpp
 	src/BlockHeader.cpp
@@ -74,7 +86,17 @@ add_library(mmx_iface SHARED
 	src/operation/Mutate.cpp
 )
 
+
+if(MSVC)
+	include(GenerateExportHeader)
+	GENERATE_EXPORT_HEADER(mmx_iface)
+	include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+	set_target_properties(mmx_iface PROPERTIES ENABLE_EXPORTS 1)
+	set_target_properties(mmx_iface PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)	
+endif()
+
 add_library(mmx_modules SHARED
+	$<TARGET_OBJECTS:uint256_t>
 	src/TimeLord.cpp
 	src/Node.cpp
 	src/Node_update.cpp
@@ -87,10 +109,6 @@ add_library(mmx_modules SHARED
 	src/OCL_VDF.cpp
 )
 
-add_library(uint256_t STATIC
-	uint256_t/uint128_t.cpp
-	uint256_t/uint256_t.cpp
-)
 
 target_include_directories(mmx_iface
 	PUBLIC
@@ -99,14 +117,35 @@ target_include_directories(mmx_iface
 		generated/contract/include
 		generated/operation/include
 		generated/solution/include
+		uint256_t
 )
-
-target_include_directories(uint256_t PUBLIC uint256_t)
 
 target_include_directories(mmx_chiapos
-	PUBLIC src/chiapos
-	PRIVATE chiapos/src chiapos/lib/include
+	PUBLIC 
+		src/chiapos 
+	PRIVATE 
+		chiapos/src 
+		chiapos/lib/include 
+		uint256_t
 )
+
+if(MSVC)
+
+	target_include_directories(mmx_modules PUBLIC ${AUTOMY_BASIC_OPENCL_BINARY_DIR})
+	target_include_directories(mmx_iface PUBLIC ${VNXBASE_BINARY_DIR})
+	
+	find_library(secp256k1_LIBRARY secp256k1 HINTS ${secp256k1_LIBRARIES})
+	add_library(secp256k1 INTERFACE IMPORTED)
+	set_target_properties(secp256k1 PROPERTIES INTERFACE_LINK_LIBRARIES "${secp256k1_LIBRARY}")
+	target_include_directories(mmx_iface PUBLIC ${secp256k1_INCLUDE_DIR})
+
+	set_target_properties(mmx_iface PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
+	set_target_properties(mmx_modules PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
+
+	set_target_properties(mmx_modules PROPERTIES ENABLE_EXPORTS 1)
+	set_target_properties(mmx_modules PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)	
+
+endif()
 
 target_link_libraries(mmx_iface uint256_t secp256k1 bech32 bls vnx_addons vnx_base)
 target_link_libraries(mmx_modules vnx_rocksdb mmx_chiapos mmx_iface)
@@ -116,12 +155,16 @@ if(OpenCL_FOUND)
 	target_compile_definitions(mmx_modules PUBLIC WITH_OPENCL)
 endif()
 
-add_executable(mmx src/mmx.cpp)
-add_executable(mmx_node src/mmx_node.cpp)
+add_executable(mmx src/mmx.cpp $<TARGET_OBJECTS:uint256_t>)
+add_executable(mmx_node src/mmx_node.cpp $<TARGET_OBJECTS:uint256_t>)
 add_executable(mmx_farmer src/mmx_farmer.cpp)
 add_executable(mmx_wallet src/mmx_wallet.cpp)
 add_executable(mmx_timelord src/mmx_timelord.cpp)
 add_executable(mmx_harvester src/mmx_harvester.cpp)
+
+if(MSVC)
+	set_target_properties(mmx PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
+endif()
 
 target_link_libraries(mmx mmx_iface)
 target_link_libraries(mmx_node mmx_modules)
@@ -130,7 +173,7 @@ target_link_libraries(mmx_wallet mmx_modules)
 target_link_libraries(mmx_timelord mmx_modules)
 target_link_libraries(mmx_harvester mmx_modules)
 
-add_executable(tx_bench src/tx_bench.cpp)
+add_executable(tx_bench src/tx_bench.cpp $<TARGET_OBJECTS:uint256_t>)
 
 target_link_libraries(tx_bench mmx_iface)
 
