@@ -13,31 +13,29 @@
 #include <mmx/operation/Mint.hxx>
 #include <mmx/ChainParams.hxx>
 #include <mmx/solution/PubKey.hxx>
-
+#include <mmx/spend_options_t.hxx>
 #include <mmx/skey_t.hpp>
 #include <mmx/addr_t.hpp>
 #include <mmx/pubkey_t.hpp>
 #include <mmx/txio_key_t.hpp>
 #include <mmx/utxo_entry_t.hpp>
+#include <mmx/account_t.hxx>
 
 
 namespace mmx {
 
 class ECDSA_Wallet {
 public:
-	int64_t last_utxo_update = 0;
-	std::vector<utxo_entry_t> utxo_cache;
-	std::unordered_set<txio_key_t> spent_txo_set;
-	std::unordered_map<txio_key_t, tx_out_t> utxo_change_cache;
+	const account_t config;
 
-	ECDSA_Wallet(std::shared_ptr<const KeyFile> key_file, std::shared_ptr<const ChainParams> params, size_t num_addresses)
-		:	params(params)
+	ECDSA_Wallet(std::shared_ptr<const KeyFile> key_file, const account_t& config, std::shared_ptr<const ChainParams> params)
+		:	config(config), params(params)
 	{
 		master_sk = hash_t(key_file->seed_value);
 
-		for(size_t i = 0; i < num_addresses + 1; ++i)
+		for(size_t i = 0; i < config.num_addresses; ++i)
 		{
-			const auto keys = generate_keypair(i);
+			const auto keys = generate_keypair(config.index, i);
 			const auto addr = keys.second;
 			keypair_map[addr] = keys;
 			keypairs.push_back(keys);
@@ -106,16 +104,18 @@ public:
 		return keys;
 	}
 
-	std::pair<skey_t, pubkey_t> generate_keypair(const uint32_t index) const
+	std::pair<skey_t, pubkey_t> generate_keypair(const uint32_t account, const uint32_t index) const
 	{
-		return generate_keypair({0, index});
+		return generate_keypair({account, index});
 	}
 
-	void update_cache(const std::vector<utxo_entry_t>& utxo_list)
+	void update_cache(const std::vector<utxo_entry_t>& utxo_list, const uint32_t height)
 	{
+		this->height = height;
+
 		utxo_cache.clear();
 		for(const auto& entry : utxo_list) {
-			if(!spent_txo_set.count(entry.key)) {
+			if(!spent_set.count(entry.key)) {
 				utxo_cache.push_back(entry);
 			}
 			utxo_change_cache.erase(entry.key);
@@ -136,14 +136,14 @@ public:
 	void update_from(std::shared_ptr<const Transaction> tx)
 	{
 		for(const auto& in : tx->inputs) {
-			spent_txo_set.insert(in.prev);
+			spent_set.insert(in.prev);
 			utxo_change_cache.erase(in.prev);
 		}
 
 		// remove spent utxo from cache
 		std::vector<utxo_entry_t> utxo_list;
 		for(const auto& entry : utxo_cache) {
-			if(!spent_txo_set.count(entry.key)) {
+			if(!spent_set.count(entry.key)) {
 				utxo_list.push_back(entry);
 			}
 		}
@@ -160,13 +160,36 @@ public:
 		}
 	}
 
-	uint64_t gather_inputs(	std::shared_ptr<Transaction> tx,
-							const std::vector<utxo_entry_t>& utxo_map,
-							std::unordered_map<txio_key_t, addr_t>& spent_map,
-							uint64_t amount, const addr_t& currency)
+	void add_outputs(	std::shared_ptr<Transaction> tx,
+						const uint64_t& amount, const addr_t& dst_addr,
+						const addr_t& currency, const spend_options_t& options)
 	{
+		const auto num_outputs = std::max<size_t>(options.split_output, 1);
+		if(num_outputs > 1000000) {
+			throw std::logic_error("too many outputs");
+		}
+		const auto chunk_size = std::max<uint64_t>(amount / num_outputs, 1);
+		uint64_t left = amount;
+		for(size_t i = 0; i < num_outputs; ++i) {
+			tx_out_t out;
+			out.address = dst_addr;
+			out.contract = currency;
+			out.amount = i < num_outputs - 1 ? chunk_size : left;
+			left -= out.amount;
+			tx->outputs.push_back(out);
+		}
+	}
+
+	uint64_t gather_inputs(	std::vector<tx_in_t>& inputs,
+							const std::vector<utxo_entry_t>& utxo_list,
+							std::unordered_map<txio_key_t, utxo_t>& spent_map,
+							uint64_t amount, const addr_t& currency,
+							const spend_options_t& options)
+	{
+		const std::unordered_set<txio_key_t> exclude(options.exclude.begin(), options.exclude.end());
+
 		uint64_t change = 0;
-		for(const auto& entry : utxo_map)
+		for(const auto& entry : utxo_list)
 		{
 			if(amount == 0) {
 				break;
@@ -175,11 +198,21 @@ public:
 			if(out.contract != currency) {
 				continue;
 			}
+			if(out.height > height) {
+				if(!options.pending_change) {
+					continue;
+				}
+			} else if((height - out.height) + 1 < options.min_confirm) {
+				continue;
+			}
 			const auto& key = entry.key;
-			if(spent_map.count(key) || spent_txo_set.count(key)) {
+			if(spent_map.count(key) || spent_set.count(key) || reserved_set.count(key) || exclude.count(key)) {
 				continue;
 			}
 			if(out.amount > amount) {
+				if(!options.over_spend) {
+					continue;
+				}
 				change += out.amount - amount;
 				amount = 0;
 			} else {
@@ -187,28 +220,40 @@ public:
 			}
 			tx_in_t in;
 			in.prev = key;
-			tx->inputs.push_back(in);
-			spent_map.emplace(key, out.address);
+			inputs.push_back(in);
+			spent_map.emplace(key, out);
 		}
-		if(amount != 0) {
+		if(amount > 0 && options.over_spend) {
 			throw std::logic_error("not enough funds");
 		}
 		return change;
 	}
 
-	uint64_t gather_fee(std::shared_ptr<Transaction> tx, std::unordered_map<txio_key_t, addr_t>& spent_map,
-						uint64_t change = 0, const std::unordered_map<addr_t, addr_t>& owner_map = {})
+	uint64_t gather_fee(std::shared_ptr<Transaction> tx,
+						std::unordered_map<txio_key_t, utxo_t>& spent_map,
+						const spend_options_t& options = {}, uint64_t change = 0,
+						const std::unordered_map<addr_t, addr_t>& owner_map = {},
+						const std::unordered_map<txio_key_t, utxo_t>& utxo_map = {})
 	{
 		uint64_t tx_fees = 0;
 		while(true) {
 			// count number of solutions needed
 			std::unordered_set<addr_t> used_addr;
 			for(const auto& in : tx->inputs) {
-				auto iter = spent_map.find(in.prev);
-				if(iter == spent_map.end()) {
-					throw std::logic_error("cannot sign input");
+				addr_t owner;
+				{
+					auto iter = spent_map.find(in.prev);
+					if(iter == spent_map.end()) {
+						auto iter = utxo_map.find(in.prev);
+						if(iter == utxo_map.end()) {
+							throw std::logic_error("unknown input");
+						} else {
+							owner = iter->second.address;
+						}
+					} else {
+						owner = iter->second.address;
+					}
 				}
-				auto owner = iter->second;
 				{
 					auto iter = owner_map.find(owner);
 					if(iter != owner_map.end()) {
@@ -217,7 +262,7 @@ public:
 				}
 				used_addr.insert(owner);
 			}
-			tx_fees = tx->calc_min_fee(params)
+			tx_fees = tx->calc_cost(params)
 					+ params->min_txfee_io	// for change output
 					+ used_addr.size() * params->min_txfee_sign;
 
@@ -240,14 +285,14 @@ public:
 			}
 			// gather more
 			const auto left = tx_fees - change;
-			change += gather_inputs(tx, utxo_cache, spent_map, left, addr_t());
+			change += gather_inputs(tx->inputs, utxo_cache, spent_map, left, addr_t(), options);
 			change += left;
 		}
 		return tx_fees;
 	}
 
 	void sign_off(	std::shared_ptr<Transaction> tx,
-					const std::unordered_map<txio_key_t, addr_t>& spent_map,
+					const std::unordered_map<txio_key_t, utxo_t>& spent_map,
 					const std::unordered_map<addr_t, addr_t>& owner_map = {})
 	{
 		tx->finalize();
@@ -261,9 +306,10 @@ public:
 			{
 				auto iter = spent_map.find(in.prev);
 				if(iter == spent_map.end()) {
-					throw std::logic_error("cannot sign input");
+					// not spent by us
+					continue;
 				}
-				owner = iter->second;
+				owner = iter->second.address;
 			}
 			{
 				auto iter = owner_map.find(owner);
@@ -291,20 +337,23 @@ public:
 		}
 	}
 
-	std::shared_ptr<Transaction> send(const uint64_t& amount, const addr_t& dst_addr, const addr_t& currency)
+	std::shared_ptr<const Solution> sign_msg(const addr_t& address, const hash_t& msg) const
+	{
+		const auto& keys = get_keypair(address);
+
+		auto sol = solution::PubKey::create();
+		sol->pubkey = keys.second;
+		sol->signature = signature_t::sign(keys.first, msg);
+		return sol;
+	}
+
+	std::shared_ptr<Transaction> send(const uint64_t& amount, const addr_t& dst_addr, const addr_t& currency, const spend_options_t& options)
 	{
 		auto tx = Transaction::create();
-		{
-			// add primary output
-			tx_out_t out;
-			out.address = dst_addr;
-			out.contract = currency;
-			out.amount = amount;
-			tx->outputs.push_back(out);
-		}
-		std::unordered_map<txio_key_t, addr_t> spent_map;
+		add_outputs(tx, amount, dst_addr, currency, options);
 
-		uint64_t change = gather_inputs(tx, utxo_cache, spent_map, amount, currency);
+		std::unordered_map<txio_key_t, utxo_t> spent_map;
+		uint64_t change = gather_inputs(tx->inputs, utxo_cache, spent_map, amount, currency, options);
 
 		if(currency != addr_t() && change > 0) {
 			// token change cannot be used as tx fee
@@ -315,26 +364,20 @@ public:
 			tx->outputs.push_back(out);
 			change = 0;
 		}
-		gather_fee(tx, spent_map, change);
+		gather_fee(tx, spent_map, options, change);
 		sign_off(tx, spent_map);
 		return tx;
 	}
 
 	std::shared_ptr<Transaction> send_from(	const uint64_t& amount, const addr_t& dst_addr, const addr_t& src_addr,
-											const addr_t& src_owner, const std::vector<utxo_entry_t>& src_utxo, const addr_t& currency)
+											const addr_t& src_owner, const std::vector<utxo_entry_t>& src_utxo, const addr_t& currency,
+											const spend_options_t& options)
 	{
 		auto tx = Transaction::create();
-		{
-			// add primary output
-			tx_out_t out;
-			out.address = dst_addr;
-			out.contract = currency;
-			out.amount = amount;
-			tx->outputs.push_back(out);
-		}
-		std::unordered_map<txio_key_t, addr_t> spent_map;
+		add_outputs(tx, amount, dst_addr, currency, options);
 
-		uint64_t change = gather_inputs(tx, src_utxo, spent_map, amount, currency);
+		std::unordered_map<txio_key_t, utxo_t> spent_map;
+		uint64_t change = gather_inputs(tx->inputs, src_utxo, spent_map, amount, currency, options);
 
 		if(change > 0) {
 			// send change back to source address
@@ -348,12 +391,13 @@ public:
 		std::unordered_map<addr_t, addr_t> owner_map;
 		owner_map.emplace(src_addr, src_owner);
 
-		gather_fee(tx, spent_map, change, owner_map);
+		gather_fee(tx, spent_map, options, change, owner_map);
 		sign_off(tx, spent_map, owner_map);
 		return tx;
 	}
 
-	std::shared_ptr<Transaction> mint(const uint64_t& amount, const addr_t& dst_addr, const addr_t& currency, const addr_t& owner)
+	std::shared_ptr<Transaction> mint(	const uint64_t& amount, const addr_t& dst_addr, const addr_t& currency,
+										const addr_t& owner, const spend_options_t& options)
 	{
 		auto tx = Transaction::create();
 
@@ -367,8 +411,8 @@ public:
 		tx->execute.push_back(op);
 
 		uint64_t change = 0;
-		std::unordered_map<txio_key_t, addr_t> spent_map;
-		gather_fee(tx, spent_map, change);
+		std::unordered_map<txio_key_t, utxo_t> spent_map;
+		gather_fee(tx, spent_map, options, change);
 		sign_off(tx, spent_map);
 		{
 			const auto& keys = get_keypair(owner);
@@ -381,7 +425,7 @@ public:
 		return tx;
 	}
 
-	std::shared_ptr<Transaction> deploy(std::shared_ptr<const Contract> contract)
+	std::shared_ptr<Transaction> deploy(std::shared_ptr<const Contract> contract, const spend_options_t& options)
 	{
 		if(!contract || !contract->is_valid()) {
 			throw std::logic_error("invalid contract");
@@ -390,11 +434,18 @@ public:
 		tx->deploy = contract;
 
 		uint64_t change = 0;
-		std::unordered_map<txio_key_t, addr_t> spent_map;
-		gather_fee(tx, spent_map, change);
+		std::unordered_map<txio_key_t, utxo_t> spent_map;
+		gather_fee(tx, spent_map, options, change);
 		sign_off(tx, spent_map);
 		return tx;
 	}
+
+	uint32_t height = 0;
+	int64_t last_utxo_update = 0;
+	std::vector<utxo_entry_t> utxo_cache;
+	std::unordered_set<txio_key_t> spent_set;
+	std::unordered_set<txio_key_t> reserved_set;
+	std::unordered_map<txio_key_t, tx_out_t> utxo_change_cache;
 
 private:
 	skey_t master_sk;

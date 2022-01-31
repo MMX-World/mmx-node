@@ -5,11 +5,13 @@ import mmx.txio_key_t;
 
 struct trade_order_t {
 	
+	uint version;
+	
 	ulong bid;
 	
-	vector<txio_key_t> bid_keys;
+	optional<ulong> ask;
 	
-	vector<txio_key_t> fee_keys;
+	vector<txio_key_t> bid_keys;
 	
 	mmx.Solution* solution;
 	

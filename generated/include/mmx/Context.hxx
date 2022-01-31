@@ -18,7 +18,6 @@ public:
 	
 	::mmx::hash_t txid;
 	uint32_t height = 0;
-	std::map<::mmx::addr_t, uint64_t> amounts;
 	std::map<::mmx::addr_t, std::shared_ptr<const ::mmx::Contract>> depends;
 	
 	typedef ::vnx::Value Super;
@@ -43,6 +42,8 @@ public:
 	void read(std::istream& _in) override;
 	void write(std::ostream& _out) const override;
 	
+	template<typename T>
+	void accept_generic(T& _visitor) const;
 	void accept(vnx::Visitor& _visitor) const override;
 	
 	vnx::Object to_object() const override;
@@ -58,6 +59,15 @@ public:
 	static std::shared_ptr<vnx::TypeCode> static_create_type_code();
 	
 };
+
+template<typename T>
+void Context::accept_generic(T& _visitor) const {
+	_visitor.template type_begin<Context>(3);
+	_visitor.type_field("txid", 0); _visitor.accept(txid);
+	_visitor.type_field("height", 1); _visitor.accept(height);
+	_visitor.type_field("depends", 2); _visitor.accept(depends);
+	_visitor.template type_end<Context>(3);
+}
 
 
 } // namespace mmx

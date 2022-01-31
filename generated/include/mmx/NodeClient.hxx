@@ -17,6 +17,7 @@
 #include <mmx/hash_t.hpp>
 #include <mmx/stxo_entry_t.hxx>
 #include <mmx/tx_entry_t.hxx>
+#include <mmx/tx_info_t.hxx>
 #include <mmx/txio_key_t.hxx>
 #include <mmx/txo_info_t.hxx>
 #include <mmx/utxo_entry_t.hxx>
@@ -85,15 +86,17 @@ public:
 	
 	vnx::optional<uint32_t> get_tx_height(const ::mmx::hash_t& id = ::mmx::hash_t());
 	
+	vnx::optional<::mmx::tx_info_t> get_tx_info(const ::mmx::hash_t& id = ::mmx::hash_t());
+	
 	std::vector<::mmx::hash_t> get_tx_ids_at(const uint32_t& height = 0);
 	
 	void add_block(std::shared_ptr<const ::mmx::Block> block = nullptr);
 	
 	void add_block_async(std::shared_ptr<const ::mmx::Block> block = nullptr);
 	
-	void add_transaction(std::shared_ptr<const ::mmx::Transaction> tx = nullptr);
+	void add_transaction(std::shared_ptr<const ::mmx::Transaction> tx = nullptr, const vnx::bool_t& pre_validate = 0);
 	
-	void add_transaction_async(std::shared_ptr<const ::mmx::Transaction> tx = nullptr);
+	void add_transaction_async(std::shared_ptr<const ::mmx::Transaction> tx = nullptr, const vnx::bool_t& pre_validate = 0);
 	
 	std::shared_ptr<const ::mmx::Contract> get_contract(const ::mmx::addr_t& address = ::mmx::addr_t());
 	
@@ -107,15 +110,15 @@ public:
 	
 	std::vector<::mmx::tx_entry_t> get_history_for(const std::vector<::mmx::addr_t>& addresses = {}, const int32_t& since = 0);
 	
-	uint64_t get_balance(const ::mmx::addr_t& address = ::mmx::addr_t(), const ::mmx::addr_t& contract = ::mmx::addr_t());
+	uint64_t get_balance(const ::mmx::addr_t& address = ::mmx::addr_t(), const ::mmx::addr_t& contract = ::mmx::addr_t(), const uint32_t& min_confirm = 1);
 	
-	uint64_t get_total_balance(const std::vector<::mmx::addr_t>& addresses = {}, const ::mmx::addr_t& contract = ::mmx::addr_t());
+	uint64_t get_total_balance(const std::vector<::mmx::addr_t>& addresses = {}, const ::mmx::addr_t& contract = ::mmx::addr_t(), const uint32_t& min_confirm = 1);
 	
-	std::map<::mmx::addr_t, uint64_t> get_total_balances(const std::vector<::mmx::addr_t>& addresses = {});
+	std::map<::mmx::addr_t, uint64_t> get_total_balances(const std::vector<::mmx::addr_t>& addresses = {}, const uint32_t& min_confirm = 1);
 	
 	uint64_t get_total_supply(const ::mmx::addr_t& contract = ::mmx::addr_t());
 	
-	std::vector<::mmx::utxo_entry_t> get_utxo_list(const std::vector<::mmx::addr_t>& addresses = {});
+	std::vector<::mmx::utxo_entry_t> get_utxo_list(const std::vector<::mmx::addr_t>& addresses = {}, const uint32_t& min_confirm = 1);
 	
 	std::vector<::mmx::stxo_entry_t> get_stxo_list(const std::vector<::mmx::addr_t>& addresses = {});
 	

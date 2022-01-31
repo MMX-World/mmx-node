@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" type="text/css" href="css/semantic.min.css">
+<script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+<script src="js/semantic.min.js"></script>
+<script src="https://unpkg.com/vue@3"></script>
+<script src="https://unpkg.com/vue-router@4"></script>
+<script src="index.js" defer></script>
+<title>MMX - GUI</title>
+<style>
+#content {
+	padding-bottom: 100px
+}
+</style>
+</head>
+
+<body>
+<div id="content">
+
+<main-menu></main-menu>
+
+<div class="ui main container">
+	<router-view></router-view>
+</div>
+
+</div>
+</body>
+</html>

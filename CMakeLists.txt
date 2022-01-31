@@ -1,21 +1,23 @@
 cmake_minimum_required(VERSION 3.11)
 project(mmx-node C CXX ASM)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fopenmp -Wall -Wno-unused-function")
+
 
 set(ARITH "easy" CACHE STRING "BLS ARITH")
 set(BUILD_BLS_PYTHON_BINDINGS OFF CACHE BOOL "BUILD_BLS_PYTHON_BINDINGS")
 set(BUILD_BLS_TESTS OFF CACHE BOOL "BUILD_BLS_TESTS")
 set(BUILD_BLS_BENCHMARKS OFF CACHE BOOL "BUILD_BLS_BENCHMARKS")
-set(LIBBECH32_BUILD_GOOGLETEST OFF CACHE BOOL "LIBBECH32_BUILD_GOOGLETEST")
-set(LIBBECH32_BUILD_RAPIDCHECK OFF CACHE BOOL "LIBBECH32_BUILD_RAPIDCHECK")
+set(LIBBECH32_BUILD_TESTS OFF CACHE BOOL "LIBBECH32_BUILD_TESTS")
+set(LIBBECH32_BUILD_EXAMPLES OFF CACHE BOOL "LIBBECH32_BUILD_EXAMPLES")
 
 add_subdirectory(vnx-base)
 add_subdirectory(vnx-addons)
 add_subdirectory(vnx-rocksdb)
 add_subdirectory(libbech32)
 add_subdirectory(bls-signatures)
+add_subdirectory(exchange)
 
 if (NOT MSVC)
 find_package(OpenCL)
@@ -106,6 +108,7 @@ add_library(mmx_modules SHARED
 	src/Farmer.cpp
 	src/Harvester.cpp
 	src/Router.cpp
+	src/WebAPI.cpp
 	src/OCL_VDF.cpp
 )
 

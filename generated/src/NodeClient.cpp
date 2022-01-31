@@ -56,6 +56,8 @@
 #include <mmx/Node_get_tx_height_return.hxx>
 #include <mmx/Node_get_tx_ids_at.hxx>
 #include <mmx/Node_get_tx_ids_at_return.hxx>
+#include <mmx/Node_get_tx_info.hxx>
+#include <mmx/Node_get_tx_info_return.hxx>
 #include <mmx/Node_get_txo_info.hxx>
 #include <mmx/Node_get_txo_info_return.hxx>
 #include <mmx/Node_get_txo_infos.hxx>
@@ -71,6 +73,7 @@
 #include <mmx/hash_t.hpp>
 #include <mmx/stxo_entry_t.hxx>
 #include <mmx/tx_entry_t.hxx>
+#include <mmx/tx_info_t.hxx>
 #include <mmx/txio_key_t.hxx>
 #include <mmx/txo_info_t.hxx>
 #include <mmx/utxo_entry_t.hxx>
@@ -377,6 +380,19 @@ vnx::optional<uint32_t> NodeClient::get_tx_height(const ::mmx::hash_t& id) {
 	}
 }
 
+vnx::optional<::mmx::tx_info_t> NodeClient::get_tx_info(const ::mmx::hash_t& id) {
+	auto _method = ::mmx::Node_get_tx_info::create();
+	_method->id = id;
+	auto _return_value = vnx_request(_method, false);
+	if(auto _result = std::dynamic_pointer_cast<const ::mmx::Node_get_tx_info_return>(_return_value)) {
+		return _result->_ret_0;
+	} else if(_return_value && !_return_value->is_void()) {
+		return _return_value->get_field_by_index(0).to<vnx::optional<::mmx::tx_info_t>>();
+	} else {
+		throw std::logic_error("NodeClient: invalid return value");
+	}
+}
+
 std::vector<::mmx::hash_t> NodeClient::get_tx_ids_at(const uint32_t& height) {
 	auto _method = ::mmx::Node_get_tx_ids_at::create();
 	_method->height = height;
@@ -402,15 +418,17 @@ void NodeClient::add_block_async(std::shared_ptr<const ::mmx::Block> block) {
 	vnx_request(_method, true);
 }
 
-void NodeClient::add_transaction(std::shared_ptr<const ::mmx::Transaction> tx) {
+void NodeClient::add_transaction(std::shared_ptr<const ::mmx::Transaction> tx, const vnx::bool_t& pre_validate) {
 	auto _method = ::mmx::Node_add_transaction::create();
 	_method->tx = tx;
+	_method->pre_validate = pre_validate;
 	vnx_request(_method, false);
 }
 
-void NodeClient::add_transaction_async(std::shared_ptr<const ::mmx::Transaction> tx) {
+void NodeClient::add_transaction_async(std::shared_ptr<const ::mmx::Transaction> tx, const vnx::bool_t& pre_validate) {
 	auto _method = ::mmx::Node_add_transaction::create();
 	_method->tx = tx;
+	_method->pre_validate = pre_validate;
 	vnx_request(_method, true);
 }
 
@@ -494,10 +512,11 @@ std::vector<::mmx::tx_entry_t> NodeClient::get_history_for(const std::vector<::m
 	}
 }
 
-uint64_t NodeClient::get_balance(const ::mmx::addr_t& address, const ::mmx::addr_t& contract) {
+uint64_t NodeClient::get_balance(const ::mmx::addr_t& address, const ::mmx::addr_t& contract, const uint32_t& min_confirm) {
 	auto _method = ::mmx::Node_get_balance::create();
 	_method->address = address;
 	_method->contract = contract;
+	_method->min_confirm = min_confirm;
 	auto _return_value = vnx_request(_method, false);
 	if(auto _result = std::dynamic_pointer_cast<const ::mmx::Node_get_balance_return>(_return_value)) {
 		return _result->_ret_0;
@@ -508,10 +527,11 @@ uint64_t NodeClient::get_balance(const ::mmx::addr_t& address, const ::mmx::addr
 	}
 }
 
-uint64_t NodeClient::get_total_balance(const std::vector<::mmx::addr_t>& addresses, const ::mmx::addr_t& contract) {
+uint64_t NodeClient::get_total_balance(const std::vector<::mmx::addr_t>& addresses, const ::mmx::addr_t& contract, const uint32_t& min_confirm) {
 	auto _method = ::mmx::Node_get_total_balance::create();
 	_method->addresses = addresses;
 	_method->contract = contract;
+	_method->min_confirm = min_confirm;
 	auto _return_value = vnx_request(_method, false);
 	if(auto _result = std::dynamic_pointer_cast<const ::mmx::Node_get_total_balance_return>(_return_value)) {
 		return _result->_ret_0;
@@ -522,9 +542,10 @@ uint64_t NodeClient::get_total_balance(const std::vector<::mmx::addr_t>& address
 	}
 }
 
-std::map<::mmx::addr_t, uint64_t> NodeClient::get_total_balances(const std::vector<::mmx::addr_t>& addresses) {
+std::map<::mmx::addr_t, uint64_t> NodeClient::get_total_balances(const std::vector<::mmx::addr_t>& addresses, const uint32_t& min_confirm) {
 	auto _method = ::mmx::Node_get_total_balances::create();
 	_method->addresses = addresses;
+	_method->min_confirm = min_confirm;
 	auto _return_value = vnx_request(_method, false);
 	if(auto _result = std::dynamic_pointer_cast<const ::mmx::Node_get_total_balances_return>(_return_value)) {
 		return _result->_ret_0;
@@ -548,9 +569,10 @@ uint64_t NodeClient::get_total_supply(const ::mmx::addr_t& contract) {
 	}
 }
 
-std::vector<::mmx::utxo_entry_t> NodeClient::get_utxo_list(const std::vector<::mmx::addr_t>& addresses) {
+std::vector<::mmx::utxo_entry_t> NodeClient::get_utxo_list(const std::vector<::mmx::addr_t>& addresses, const uint32_t& min_confirm) {
 	auto _method = ::mmx::Node_get_utxo_list::create();
 	_method->addresses = addresses;
+	_method->min_confirm = min_confirm;
 	auto _return_value = vnx_request(_method, false);
 	if(auto _result = std::dynamic_pointer_cast<const ::mmx::Node_get_utxo_list_return>(_return_value)) {
 		return _result->_ret_0;

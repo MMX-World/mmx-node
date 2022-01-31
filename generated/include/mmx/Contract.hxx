@@ -38,6 +38,7 @@ public:
 	virtual ::mmx::hash_t calc_hash() const;
 	virtual uint64_t calc_min_fee(std::shared_ptr<const ::mmx::ChainParams> params = nullptr) const;
 	virtual std::vector<::mmx::addr_t> get_dependency() const;
+	virtual std::vector<::mmx::addr_t> get_parties() const;
 	virtual vnx::optional<::mmx::addr_t> get_owner() const;
 	virtual std::vector<::mmx::tx_out_t> validate(std::shared_ptr<const ::mmx::Operation> operation = nullptr, std::shared_ptr<const ::mmx::Context> context = nullptr) const;
 	
@@ -50,6 +51,8 @@ public:
 	void read(std::istream& _in) override;
 	void write(std::ostream& _out) const override;
 	
+	template<typename T>
+	void accept_generic(T& _visitor) const;
 	void accept(vnx::Visitor& _visitor) const override;
 	
 	vnx::Object to_object() const override;
@@ -65,6 +68,13 @@ public:
 	static std::shared_ptr<vnx::TypeCode> static_create_type_code();
 	
 };
+
+template<typename T>
+void Contract::accept_generic(T& _visitor) const {
+	_visitor.template type_begin<Contract>(1);
+	_visitor.type_field("version", 0); _visitor.accept(version);
+	_visitor.template type_end<Contract>(1);
+}
 
 
 } // namespace mmx

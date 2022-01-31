@@ -6,6 +6,7 @@
 
 #include <mmx/package.hxx>
 #include <mmx/Contract.hxx>
+#include <mmx/spend_options_t.hxx>
 #include <vnx/Value.h>
 
 
@@ -16,6 +17,7 @@ public:
 	
 	uint32_t index = 0;
 	std::shared_ptr<const ::mmx::Contract> contract;
+	::mmx::spend_options_t options;
 	
 	typedef ::vnx::Value Super;
 	
@@ -39,6 +41,8 @@ public:
 	void read(std::istream& _in) override;
 	void write(std::ostream& _out) const override;
 	
+	template<typename T>
+	void accept_generic(T& _visitor) const;
 	void accept(vnx::Visitor& _visitor) const override;
 	
 	vnx::Object to_object() const override;
@@ -54,6 +58,15 @@ public:
 	static std::shared_ptr<vnx::TypeCode> static_create_type_code();
 	
 };
+
+template<typename T>
+void Wallet_deploy::accept_generic(T& _visitor) const {
+	_visitor.template type_begin<Wallet_deploy>(3);
+	_visitor.type_field("index", 0); _visitor.accept(index);
+	_visitor.type_field("contract", 1); _visitor.accept(contract);
+	_visitor.type_field("options", 2); _visitor.accept(options);
+	_visitor.template type_end<Wallet_deploy>(3);
+}
 
 
 } // namespace mmx

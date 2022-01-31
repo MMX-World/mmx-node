@@ -21,6 +21,8 @@
 #include <vnx/rocksdb/multi_table.h>
 #include <vnx/addons/HttpInterface.h>
 
+#include <shared_mutex>
+
 
 namespace mmx {
 
@@ -55,6 +57,8 @@ protected:
 
 	std::vector<hash_t> get_tx_ids_at(const uint32_t& height) const override;
 
+	vnx::optional<tx_info_t> get_tx_info(const hash_t& id) const override;
+
 	vnx::optional<txo_info_t> get_txo_info(const txio_key_t& key) const override;
 
 	std::vector<vnx::optional<txo_info_t>> get_txo_infos(const std::vector<txio_key_t>& keys) const override;
@@ -73,17 +77,17 @@ protected:
 
 	void add_block(std::shared_ptr<const Block> block) override;
 
-	void add_transaction(std::shared_ptr<const Transaction> tx) override;
+	void add_transaction(std::shared_ptr<const Transaction> tx, const vnx::bool_t& pre_validate = false) override;
 
-	uint64_t get_balance(const addr_t& address, const addr_t& contract) const override;
+	uint64_t get_balance(const addr_t& address, const addr_t& contract, const uint32_t& min_confirm) const override;
 
-	uint64_t get_total_balance(const std::vector<addr_t>& addresses, const addr_t& contract) const override;
+	uint64_t get_total_balance(const std::vector<addr_t>& addresses, const addr_t& contract, const uint32_t& min_confirm) const override;
 
-	std::map<addr_t, uint64_t> get_total_balances(const std::vector<addr_t>& addresses) const override;
+	std::map<addr_t, uint64_t> get_total_balances(const std::vector<addr_t>& addresses, const uint32_t& min_confirm) const override;
 
 	uint64_t get_total_supply(const addr_t& contract) const override;
 
-	std::vector<utxo_entry_t> get_utxo_list(const std::vector<addr_t>& addresses) const override;
+	std::vector<utxo_entry_t> get_utxo_list(const std::vector<addr_t>& addresses, const uint32_t& min_confirm) const override;
 
 	std::vector<stxo_entry_t> get_stxo_list(const std::vector<addr_t>& addresses) const override;
 
@@ -97,13 +101,13 @@ protected:
 	void http_request_chunk_async(	std::shared_ptr<const vnx::addons::HttpRequest> request, const std::string& sub_path,
 									const int64_t& offset, const int64_t& max_bytes, const vnx::request_id_t& request_id) const override;
 
-	void handle(std::shared_ptr<const Block> block);
+	void handle(std::shared_ptr<const Block> block) override;
 
-	void handle(std::shared_ptr<const Transaction> tx);
+	void handle(std::shared_ptr<const Transaction> tx) override;
 
-	void handle(std::shared_ptr<const ProofOfTime> proof);
+	void handle(std::shared_ptr<const ProofOfTime> proof) override;
 
-	void handle(std::shared_ptr<const ProofResponse> value);
+	void handle(std::shared_ptr<const ProofResponse> value) override;
 
 private:
 	struct vdf_point_t {
@@ -174,8 +178,11 @@ private:
 
 	void validate(std::shared_ptr<const Block> block) const;
 
+	void validate(std::shared_ptr<const Transaction> tx) const;
+
 	std::shared_ptr<const Context> create_context(
-			std::shared_ptr<const Contract> contract, std::shared_ptr<const Context> base, std::shared_ptr<const Transaction> tx) const;
+			const addr_t& address, std::shared_ptr<const Contract> contract,
+			std::shared_ptr<const Context> base, std::shared_ptr<const Transaction> tx) const;
 
 	std::shared_ptr<const Transaction> validate(std::shared_ptr<const Transaction> tx, std::shared_ptr<const Context> context,
 												std::shared_ptr<const Block> base, uint64_t& fee_amount) const;
@@ -239,7 +246,7 @@ private:
 
 	uint64_t calc_block_reward(std::shared_ptr<const BlockHeader> block) const;
 
-	std::shared_ptr<const Block> read_block(bool is_replay = false, int64_t* file_offset = nullptr);
+	std::shared_ptr<const Block> read_block(vnx::File& file, int64_t* file_offset = nullptr) const;
 
 	void write_block(std::shared_ptr<const Block> block);
 
@@ -256,10 +263,10 @@ private:
 	vnx::rocksdb::multi_table<addr_t, addr_t> owner_map;							// [owner => contract]
 	vnx::rocksdb::multi_table<uint32_t, hash_t> tx_log;								// [height => txid] (finalized only)
 
-	std::unordered_map<hash_t, uint32_t> tx_map;									// [txid => height] (pending only)
 	std::unordered_map<txio_key_t, utxo_t> utxo_map;								// [utxo key => utxo]
 	std::set<std::pair<addr_t, txio_key_t>> addr_map;								// [addr => utxo keys] (finalized + unspent only)
 	std::unordered_map<addr_t, std::unordered_set<txio_key_t>> taddr_map;			// [addr => utxo keys] (pending + unspent only)
+	std::unordered_map<hash_t, std::pair<std::shared_ptr<const Transaction>, uint32_t>> tx_map;		// [txid => [tx, height]] (executed + pending only)
 
 	std::multimap<uint32_t, std::shared_ptr<fork_t>> fork_index;					// [height => fork]
 	std::unordered_map<hash_t, std::shared_ptr<fork_t>> fork_tree;					// [block hash => fork] (pending only)
@@ -272,12 +279,16 @@ private:
 	std::unordered_multimap<uint32_t, hash_t> challenge_map;						// [height => challenge]
 	std::unordered_map<hash_t, std::shared_ptr<const ProofResponse>> proof_map;		// [challenge => proof]
 
-	std::unordered_set<hash_t> light_address_set;									// addresses for light mode
+	std::unordered_set<addr_t> light_address_set;									// addresses for light mode
 
 	bool is_replay = true;
 	bool is_synced = false;
 	std::shared_ptr<vnx::File> block_chain;
 	std::unordered_map<uint32_t, std::pair<int64_t, hash_t>> block_index;			// [height => [file offset, block hash]]
+
+	mutable std::shared_mutex cache_mutex;
+	mutable std::queue<addr_t> contract_cache_queue;
+	mutable std::unordered_map<addr_t, std::shared_ptr<const Contract>> contract_map;		// [addr => contract] (cached only)
 
 	uint32_t sync_pos = 0;									// current sync height
 	uint32_t sync_retry = 0;
@@ -293,7 +304,7 @@ private:
 	std::shared_ptr<vnx::addons::HttpInterface<Node>> http;
 
 	mutable std::mutex vdf_mutex;
-	std::unordered_set<uint32_t> vdf_verify_pending;						// height
+	std::unordered_set<uint32_t> vdf_verify_pending;		// height
 	std::shared_ptr<OCL_VDF> opencl_vdf[2];
 	std::shared_ptr<vnx::ThreadPool> vdf_threads;
 

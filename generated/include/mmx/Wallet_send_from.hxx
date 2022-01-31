@@ -6,6 +6,7 @@
 
 #include <mmx/package.hxx>
 #include <mmx/addr_t.hpp>
+#include <mmx/spend_options_t.hxx>
 #include <vnx/Value.h>
 
 
@@ -19,6 +20,7 @@ public:
 	::mmx::addr_t dst_addr;
 	::mmx::addr_t src_addr;
 	::mmx::addr_t currency;
+	::mmx::spend_options_t options;
 	
 	typedef ::vnx::Value Super;
 	
@@ -42,6 +44,8 @@ public:
 	void read(std::istream& _in) override;
 	void write(std::ostream& _out) const override;
 	
+	template<typename T>
+	void accept_generic(T& _visitor) const;
 	void accept(vnx::Visitor& _visitor) const override;
 	
 	vnx::Object to_object() const override;
@@ -57,6 +61,18 @@ public:
 	static std::shared_ptr<vnx::TypeCode> static_create_type_code();
 	
 };
+
+template<typename T>
+void Wallet_send_from::accept_generic(T& _visitor) const {
+	_visitor.template type_begin<Wallet_send_from>(6);
+	_visitor.type_field("index", 0); _visitor.accept(index);
+	_visitor.type_field("amount", 1); _visitor.accept(amount);
+	_visitor.type_field("dst_addr", 2); _visitor.accept(dst_addr);
+	_visitor.type_field("src_addr", 3); _visitor.accept(src_addr);
+	_visitor.type_field("currency", 4); _visitor.accept(currency);
+	_visitor.type_field("options", 5); _visitor.accept(options);
+	_visitor.template type_end<Wallet_send_from>(6);
+}
 
 
 } // namespace mmx

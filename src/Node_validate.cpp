@@ -84,7 +84,7 @@ void Node::validate(std::shared_ptr<const Block> block) const
 					throw std::logic_error("missing exec_outputs");
 				}
 				total_fees += fees;
-				total_cost += tx->calc_min_fee(params);
+				total_cost += tx->calc_cost(params);
 			}
 		} catch(...) {
 #pragma omp critical
@@ -104,7 +104,16 @@ void Node::validate(std::shared_ptr<const Block> block) const
 	}
 }
 
-std::shared_ptr<const Context> Node::create_context(std::shared_ptr<const Contract> contract,
+void Node::validate(std::shared_ptr<const Transaction> tx) const
+{
+	auto context = Context::create();
+	context->height = get_height();
+
+	uint64_t fee = 0;
+	validate(tx, context, nullptr, fee);
+}
+
+std::shared_ptr<const Context> Node::create_context(const addr_t& address, std::shared_ptr<const Contract> contract,
 													std::shared_ptr<const Context> base, std::shared_ptr<const Transaction> tx) const
 {
 	auto context = vnx::clone(base);
@@ -174,6 +183,8 @@ std::shared_ptr<const Transaction> Node::validate(	std::shared_ptr<const Transac
 				auto pubkey = contract::PubKey::create();
 				pubkey->address = utxo.address;
 				contract = pubkey;
+			} else if(!solution->is_contract) {
+				// TODO: throw std::logic_error("invalid solution: !is_contract");
 			}
 			auto spend = operation::Spend::create();
 			spend->address = utxo.address;
@@ -181,7 +192,7 @@ std::shared_ptr<const Transaction> Node::validate(	std::shared_ptr<const Transac
 			spend->key = in.prev;
 			spend->utxo = utxo;
 
-			const auto outputs = contract->validate(spend, create_context(contract, context, tx));
+			const auto outputs = contract->validate(spend, create_context(utxo.address, contract, context, tx));
 			exec_outputs.insert(exec_outputs.end(), outputs.begin(), outputs.end());
 
 			amounts[utxo.contract] += utxo.amount;
@@ -193,7 +204,7 @@ std::shared_ptr<const Transaction> Node::validate(	std::shared_ptr<const Transac
 			throw std::logic_error("invalid operation");
 		}
 		if(auto contract = get_contract(op->address)) {
-			const auto outputs = contract->validate(op, create_context(contract, context, tx));
+			const auto outputs = contract->validate(op, create_context(op->address, contract, context, tx));
 			exec_outputs.insert(exec_outputs.end(), outputs.begin(), outputs.end());
 		} else {
 			throw std::logic_error("no such contract");
@@ -236,7 +247,7 @@ std::shared_ptr<const Transaction> Node::validate(	std::shared_ptr<const Transac
 	}
 	fee_amount = amounts[hash_t()];
 
-	const auto fee_needed = tx->calc_min_fee(params);
+	const auto fee_needed = tx->calc_cost(params);
 	if(fee_amount < fee_needed) {
 		throw std::logic_error("insufficient fee: " + std::to_string(fee_amount) + " < " + std::to_string(fee_needed));
 	}

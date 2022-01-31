@@ -4,6 +4,7 @@
 #include <mmx/package.hxx>
 #include <mmx/Block.hxx>
 #include <mmx/BlockHeader.hxx>
+#include <mmx/ChainParams.hxx>
 #include <mmx/TransactionBase.hxx>
 #include <mmx/hash_t.hpp>
 
@@ -208,8 +209,6 @@ void Block::set_field(const std::string& _name, const vnx::Variant& _value) {
 		_value.to(farmer_sig);
 	} else if(_name == "tx_list") {
 		_value.to(tx_list);
-	} else {
-		throw std::logic_error("no such field: '" + _name + "'");
 	}
 }
 
