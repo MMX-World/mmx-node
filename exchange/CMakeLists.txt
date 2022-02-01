@@ -17,6 +17,16 @@ target_include_directories(mmx_exchange
 	PUBLIC include generated/include
 )
 
-target_link_libraries(mmx_exchange mmx_iface)
+if(MSVC)
+	target_include_directories(mmx_exchange PUBLIC ${MMXIFACE_BINARY_DIR})
+	include_directories(generated/include)
+
+	set_target_properties(mmx_exchange PROPERTIES ENABLE_EXPORTS 1)
+	set_target_properties(mmx_exchange PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)	
+	set_target_properties(mmx_exchange PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
+
+endif()
+
+target_link_libraries(mmx_exchange mmx_iface $<TARGET_OBJECTS:uint256_t>)
 
 target_link_libraries(mmx_exch_server mmx_exchange)

@@ -39,7 +39,7 @@ if(SODIUM_FOUND)
 	include_directories(${SODIUM_INCLUDE_DIR})
 endif()
 
-if(WITH_SECP256K1)
+if (WITH_SECP256K1 AND NOT MSVC)
 	message(STATUS "Using secp256k1")
 	include_directories(secp256k1/include)
 	link_directories(secp256k1/.libs)
@@ -92,6 +92,7 @@ add_library(mmx_iface SHARED
 if(MSVC)
 	include(GenerateExportHeader)
 	GENERATE_EXPORT_HEADER(mmx_iface)
+	set(MMXIFACE_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" CACHE STRING "")
 	include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 	set_target_properties(mmx_iface PROPERTIES ENABLE_EXPORTS 1)
 	set_target_properties(mmx_iface PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)	
@@ -121,6 +122,8 @@ target_include_directories(mmx_iface
 		generated/operation/include
 		generated/solution/include
 		uint256_t
+		exchange/generated/include
+		exchange/include
 )
 
 target_include_directories(mmx_chiapos
@@ -158,8 +161,8 @@ if(OpenCL_FOUND)
 	target_compile_definitions(mmx_modules PUBLIC WITH_OPENCL)
 endif()
 
-add_executable(mmx src/mmx.cpp $<TARGET_OBJECTS:uint256_t>)
-add_executable(mmx_node src/mmx_node.cpp $<TARGET_OBJECTS:uint256_t>)
+add_executable(mmx src/mmx.cpp)
+add_executable(mmx_node src/mmx_node.cpp)
 add_executable(mmx_farmer src/mmx_farmer.cpp)
 add_executable(mmx_wallet src/mmx_wallet.cpp)
 add_executable(mmx_timelord src/mmx_timelord.cpp)
@@ -169,8 +172,8 @@ if(MSVC)
 	set_target_properties(mmx PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
 endif()
 
-target_link_libraries(mmx mmx_iface)
-target_link_libraries(mmx_node mmx_modules)
+target_link_libraries(mmx mmx_iface mmx_exchange)
+target_link_libraries(mmx_node mmx_modules mmx_exchange)
 target_link_libraries(mmx_farmer mmx_modules)
 target_link_libraries(mmx_wallet mmx_modules)
 target_link_libraries(mmx_timelord mmx_modules)
