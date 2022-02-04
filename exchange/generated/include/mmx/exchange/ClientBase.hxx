@@ -19,6 +19,9 @@
 #include <mmx/txio_key_t.hxx>
 #include <mmx/ulong_fraction_t.hxx>
 #include <vnx/TopicPtr.hpp>
+#include <vnx/addons/HttpData.hxx>
+#include <vnx/addons/HttpRequest.hxx>
+#include <vnx/addons/HttpResponse.hxx>
 #include <vnx/addons/MsgServer.h>
 
 
@@ -32,6 +35,7 @@ public:
 	std::string node_server = "Node";
 	std::string wallet_server = "Wallet";
 	std::map<std::string, std::string> server_map;
+	std::string storage_path;
 	
 	typedef ::vnx::addons::MsgServer Super;
 	
@@ -71,9 +75,11 @@ protected:
 	virtual std::vector<std::string> get_servers() const = 0;
 	virtual void execute_async(const std::string& server, const uint32_t& wallet, const ::mmx::exchange::matched_order_t& order, const vnx::request_id_t& _request_id) const = 0;
 	void execute_async_return(const vnx::request_id_t& _request_id, const ::mmx::hash_t& _ret_0) const;
-	virtual void match_async(const std::string& server, const ::mmx::exchange::trade_pair_t& pair, const std::vector<::mmx::exchange::trade_order_t>& orders, const vnx::request_id_t& _request_id) const = 0;
+	virtual void match_async(const std::string& server, const std::vector<::mmx::exchange::trade_order_t>& orders, const vnx::request_id_t& _request_id) const = 0;
 	void match_async_return(const vnx::request_id_t& _request_id, const std::vector<::mmx::exchange::matched_order_t>& _ret_0) const;
-	virtual void get_orders_async(const std::string& server, const ::mmx::exchange::trade_pair_t& pair, const vnx::request_id_t& _request_id) const = 0;
+	virtual void get_trade_pairs_async(const std::string& server, const vnx::request_id_t& _request_id) const = 0;
+	void get_trade_pairs_async_return(const vnx::request_id_t& _request_id, const std::vector<::mmx::exchange::trade_pair_t>& _ret_0) const;
+	virtual void get_orders_async(const std::string& server, const ::mmx::exchange::trade_pair_t& pair, const int32_t& limit, const vnx::request_id_t& _request_id) const = 0;
 	void get_orders_async_return(const vnx::request_id_t& _request_id, const std::vector<::mmx::exchange::order_t>& _ret_0) const;
 	virtual void get_price_async(const std::string& server, const ::mmx::addr_t& want, const ::mmx::exchange::amount_t& have, const vnx::request_id_t& _request_id) const = 0;
 	void get_price_async_return(const vnx::request_id_t& _request_id, const ::mmx::ulong_fraction_t& _ret_0) const;
@@ -87,6 +93,10 @@ protected:
 	virtual void place(std::shared_ptr<const ::mmx::exchange::OfferBundle> offer) = 0;
 	virtual std::shared_ptr<const ::mmx::Transaction> approve(std::shared_ptr<const ::mmx::Transaction> tx) const = 0;
 	virtual void handle(std::shared_ptr<const ::mmx::Block> _value) {}
+	virtual void http_request_async(std::shared_ptr<const ::vnx::addons::HttpRequest> request, const std::string& sub_path, const vnx::request_id_t& _request_id) const = 0;
+	void http_request_async_return(const vnx::request_id_t& _request_id, const std::shared_ptr<const ::vnx::addons::HttpResponse>& _ret_0) const;
+	virtual void http_request_chunk_async(std::shared_ptr<const ::vnx::addons::HttpRequest> request, const std::string& sub_path, const int64_t& offset, const int64_t& max_bytes, const vnx::request_id_t& _request_id) const = 0;
+	void http_request_chunk_async_return(const vnx::request_id_t& _request_id, const std::shared_ptr<const ::vnx::addons::HttpData>& _ret_0) const;
 	
 	void vnx_handle_switch(std::shared_ptr<const vnx::Value> _value) override;
 	std::shared_ptr<vnx::Value> vnx_call_switch(std::shared_ptr<const vnx::Value> _method, const vnx::request_id_t& _request_id) override;
@@ -95,7 +105,7 @@ protected:
 
 template<typename T>
 void ClientBase::accept_generic(T& _visitor) const {
-	_visitor.template type_begin<ClientBase>(16);
+	_visitor.template type_begin<ClientBase>(17);
 	_visitor.type_field("port", 0); _visitor.accept(port);
 	_visitor.type_field("host", 1); _visitor.accept(host);
 	_visitor.type_field("max_connections", 2); _visitor.accept(max_connections);
@@ -112,7 +122,8 @@ void ClientBase::accept_generic(T& _visitor) const {
 	_visitor.type_field("node_server", 13); _visitor.accept(node_server);
 	_visitor.type_field("wallet_server", 14); _visitor.accept(wallet_server);
 	_visitor.type_field("server_map", 15); _visitor.accept(server_map);
-	_visitor.template type_end<ClientBase>(16);
+	_visitor.type_field("storage_path", 16); _visitor.accept(storage_path);
+	_visitor.template type_end<ClientBase>(17);
 }
 
 

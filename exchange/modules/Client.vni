@@ -6,7 +6,7 @@ import mmx.txio_key_t;
 import mmx.Transaction;
 import mmx.ulong_fraction_t;
 
-module Client extends vnx.addons.MsgServer {
+module Client extends vnx.addons.MsgServer implements vnx.addons.HttpComponent {
 	
 	vnx.TopicPtr input_blocks = "node.verified_blocks";
 	
@@ -15,15 +15,19 @@ module Client extends vnx.addons.MsgServer {
 	
 	map<string, string> server_map;			// [name => address]
 	
+	string storage_path;
+	
 	
 	vector<string> get_servers() const;
 	
 	@Permission(mmx.permission_e.SPENDING)
 	hash_t execute(string server, uint wallet, matched_order_t order) const async;
 	
-	vector<matched_order_t> match(string server, trade_pair_t pair, vector<trade_order_t> orders) const async;
+	vector<matched_order_t> match(string server, vector<trade_order_t> orders) const async;
 	
-	vector<order_t> get_orders(string server, trade_pair_t pair) const async;
+	vector<trade_pair_t> get_trade_pairs(string server) const async;
+	
+	vector<order_t> get_orders(string server, trade_pair_t pair, int limit = -1) const async;
 	
 	ulong_fraction_t get_price(string server, addr_t want, amount_t have) const async;
 	

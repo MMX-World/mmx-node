@@ -26,6 +26,8 @@
 #include <mmx/exchange/Client_get_price_return.hxx>
 #include <mmx/exchange/Client_get_servers.hxx>
 #include <mmx/exchange/Client_get_servers_return.hxx>
+#include <mmx/exchange/Client_get_trade_pairs.hxx>
+#include <mmx/exchange/Client_get_trade_pairs_return.hxx>
 #include <mmx/exchange/Client_make_offer.hxx>
 #include <mmx/exchange/Client_make_offer_return.hxx>
 #include <mmx/exchange/Client_make_trade.hxx>
@@ -63,6 +65,13 @@
 #include <vnx/ModuleInterface_vnx_stop.hxx>
 #include <vnx/ModuleInterface_vnx_stop_return.hxx>
 #include <vnx/TopicPtr.hpp>
+#include <vnx/addons/HttpComponent_http_request.hxx>
+#include <vnx/addons/HttpComponent_http_request_return.hxx>
+#include <vnx/addons/HttpComponent_http_request_chunk.hxx>
+#include <vnx/addons/HttpComponent_http_request_chunk_return.hxx>
+#include <vnx/addons/HttpData.hxx>
+#include <vnx/addons/HttpRequest.hxx>
+#include <vnx/addons/HttpResponse.hxx>
 #include <vnx/addons/MsgServer.h>
 
 #include <vnx/Generic.hxx>
@@ -216,10 +225,9 @@ std::vector<std::string> ClientClient::get_servers() {
 	}
 }
 
-std::vector<::mmx::exchange::matched_order_t> ClientClient::match(const std::string& server, const ::mmx::exchange::trade_pair_t& pair, const std::vector<::mmx::exchange::trade_order_t>& orders) {
+std::vector<::mmx::exchange::matched_order_t> ClientClient::match(const std::string& server, const std::vector<::mmx::exchange::trade_order_t>& orders) {
 	auto _method = ::mmx::exchange::Client_match::create();
 	_method->server = server;
-	_method->pair = pair;
 	_method->orders = orders;
 	auto _return_value = vnx_request(_method, false);
 	if(auto _result = std::dynamic_pointer_cast<const ::mmx::exchange::Client_match_return>(_return_value)) {
@@ -231,10 +239,24 @@ std::vector<::mmx::exchange::matched_order_t> ClientClient::match(const std::str
 	}
 }
 
-std::vector<::mmx::exchange::order_t> ClientClient::get_orders(const std::string& server, const ::mmx::exchange::trade_pair_t& pair) {
+std::vector<::mmx::exchange::trade_pair_t> ClientClient::get_trade_pairs(const std::string& server) {
+	auto _method = ::mmx::exchange::Client_get_trade_pairs::create();
+	_method->server = server;
+	auto _return_value = vnx_request(_method, false);
+	if(auto _result = std::dynamic_pointer_cast<const ::mmx::exchange::Client_get_trade_pairs_return>(_return_value)) {
+		return _result->_ret_0;
+	} else if(_return_value && !_return_value->is_void()) {
+		return _return_value->get_field_by_index(0).to<std::vector<::mmx::exchange::trade_pair_t>>();
+	} else {
+		throw std::logic_error("ClientClient: invalid return value");
+	}
+}
+
+std::vector<::mmx::exchange::order_t> ClientClient::get_orders(const std::string& server, const ::mmx::exchange::trade_pair_t& pair, const int32_t& limit) {
 	auto _method = ::mmx::exchange::Client_get_orders::create();
 	_method->server = server;
 	_method->pair = pair;
+	_method->limit = limit;
 	auto _return_value = vnx_request(_method, false);
 	if(auto _result = std::dynamic_pointer_cast<const ::mmx::exchange::Client_get_orders_return>(_return_value)) {
 		return _result->_ret_0;
@@ -372,6 +394,36 @@ std::shared_ptr<const ::mmx::Transaction> ClientClient::approve(std::shared_ptr<
 		return _result->_ret_0;
 	} else if(_return_value && !_return_value->is_void()) {
 		return _return_value->get_field_by_index(0).to<std::shared_ptr<const ::mmx::Transaction>>();
+	} else {
+		throw std::logic_error("ClientClient: invalid return value");
+	}
+}
+
+std::shared_ptr<const ::vnx::addons::HttpResponse> ClientClient::http_request(std::shared_ptr<const ::vnx::addons::HttpRequest> request, const std::string& sub_path) {
+	auto _method = ::vnx::addons::HttpComponent_http_request::create();
+	_method->request = request;
+	_method->sub_path = sub_path;
+	auto _return_value = vnx_request(_method, false);
+	if(auto _result = std::dynamic_pointer_cast<const ::vnx::addons::HttpComponent_http_request_return>(_return_value)) {
+		return _result->_ret_0;
+	} else if(_return_value && !_return_value->is_void()) {
+		return _return_value->get_field_by_index(0).to<std::shared_ptr<const ::vnx::addons::HttpResponse>>();
+	} else {
+		throw std::logic_error("ClientClient: invalid return value");
+	}
+}
+
+std::shared_ptr<const ::vnx::addons::HttpData> ClientClient::http_request_chunk(std::shared_ptr<const ::vnx::addons::HttpRequest> request, const std::string& sub_path, const int64_t& offset, const int64_t& max_bytes) {
+	auto _method = ::vnx::addons::HttpComponent_http_request_chunk::create();
+	_method->request = request;
+	_method->sub_path = sub_path;
+	_method->offset = offset;
+	_method->max_bytes = max_bytes;
+	auto _return_value = vnx_request(_method, false);
+	if(auto _result = std::dynamic_pointer_cast<const ::vnx::addons::HttpComponent_http_request_chunk_return>(_return_value)) {
+		return _result->_ret_0;
+	} else if(_return_value && !_return_value->is_void()) {
+		return _return_value->get_field_by_index(0).to<std::shared_ptr<const ::vnx::addons::HttpData>>();
 	} else {
 		throw std::logic_error("ClientClient: invalid return value");
 	}

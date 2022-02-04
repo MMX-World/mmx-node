@@ -329,7 +329,7 @@ void Server::execute_async(std::shared_ptr<const Transaction> tx, const vnx::req
 		std::bind(&Server::vnx_async_return_ex, this, request_id, std::placeholders::_1));
 }
 
-void Server::match_async(const trade_pair_t& pair, const trade_order_t& order, const vnx::request_id_t& request_id) const
+void Server::match_async(const trade_order_t& order, const vnx::request_id_t& request_id) const
 {
 	const auto solution = std::dynamic_pointer_cast<const solution::PubKey>(order.solution);
 	if(!solution || !solution->signature.verify(solution->pubkey, order.calc_hash())) {
@@ -338,7 +338,7 @@ void Server::match_async(const trade_pair_t& pair, const trade_order_t& order, c
 	const auto address = solution->pubkey.get_addr();
 
 	node->get_txo_infos(order.bid_keys,
-		[this, pair, address, order, request_id](const std::vector<vnx::optional<txo_info_t>>& entries) {
+		[this, address, order, request_id](const std::vector<vnx::optional<txo_info_t>>& entries) {
 			uint64_t max_bid = 0;
 			std::vector<std::pair<txio_key_t, uint64_t>> bid_keys;
 			for(size_t i = 0; i < entries.size() && i < order.bid_keys.size(); ++i) {
@@ -346,7 +346,7 @@ void Server::match_async(const trade_pair_t& pair, const trade_order_t& order, c
 					const auto& utxo = entry->output;
 					if(!entry->spent
 						&& utxo.address == address
-						&& utxo.contract == pair.bid)
+						&& utxo.contract == order.pair.bid)
 					{
 						max_bid += utxo.amount;
 						const auto& key = order.bid_keys[i];
@@ -358,7 +358,7 @@ void Server::match_async(const trade_pair_t& pair, const trade_order_t& order, c
 				vnx_async_return_ex_what(request_id, "empty order");
 				return;
 			}
-			const auto book = find_pair(pair.reverse());
+			const auto book = find_pair(order.pair.reverse());
 			if(!book) {
 				vnx_async_return_ex_what(request_id, "no such trade pair");
 				return;
@@ -366,7 +366,7 @@ void Server::match_async(const trade_pair_t& pair, const trade_order_t& order, c
 			const auto max_price = order.ask ? order.bid / double(*order.ask) : std::numeric_limits<double>::infinity();
 
 			matched_order_t result;
-			result.pair = pair;
+			result.pair = order.pair;
 
 			// match orders
 			auto tx = Transaction::create();
@@ -404,7 +404,7 @@ void Server::match_async(const trade_pair_t& pair, const trade_order_t& order, c
 			for(const auto& entry : output_map) {
 				tx_out_t out;
 				out.address = entry.first;
-				out.contract = pair.bid;
+				out.contract = order.pair.bid;
 				out.amount = entry.second;
 				tx->outputs.push_back(out);
 			}
@@ -424,7 +424,7 @@ void Server::match_async(const trade_pair_t& pair, const trade_order_t& order, c
 					// change output
 					tx_out_t out;
 					out.address = address;
-					out.contract = pair.bid;
+					out.contract = order.pair.bid;
 					out.amount = entry.second - bid_left;
 					tx->outputs.push_back(out);
 					bid_left = 0;
@@ -434,7 +434,7 @@ void Server::match_async(const trade_pair_t& pair, const trade_order_t& order, c
 			{
 				tx_out_t out;
 				out.address = address;
-				out.contract = pair.ask;
+				out.contract = order.pair.ask;
 				out.amount = result.ask;
 				tx->outputs.push_back(out);
 			}
@@ -444,11 +444,24 @@ void Server::match_async(const trade_pair_t& pair, const trade_order_t& order, c
 		std::bind(&Server::vnx_async_return_ex, this, request_id, std::placeholders::_1));
 }
 
-std::vector<order_t> Server::get_orders(const trade_pair_t& pair) const
+std::vector<trade_pair_t> Server::get_trade_pairs() const
 {
+	std::vector<trade_pair_t> res;
+	for(const auto& entry : trade_map) {
+		res.push_back(entry.first);
+	}
+	return res;
+}
+
+std::vector<order_t> Server::get_orders(const trade_pair_t& pair, const int32_t& limit_) const
+{
+	const size_t limit = limit_;
 	std::vector<order_t> orders;
 	if(auto book = find_pair(pair)) {
 		for(const auto& entry : book->orders) {
+			if(orders.size() >= limit) {
+				break;
+			}
 			const auto& order = entry.second;
 			if(utxo_map.count(order.bid_key) && is_open(order.bid_key)) {
 				orders.push_back(order);
@@ -464,7 +477,7 @@ ulong_fraction_t Server::get_price(const addr_t& want, const amount_t& have) con
 	price.inverse = 0;
 
 	uint64_t left = have.amount;
-	for(const auto& order : get_orders(trade_pair_t::create_ex(want, have.currency))) {
+	for(const auto& order : get_orders(trade_pair_t::create_ex(want, have.currency), 100)) {
 		if(order.ask >= left) {
 			price.value += order.bid;
 			price.inverse += order.ask;
@@ -477,6 +490,10 @@ ulong_fraction_t Server::get_price(const addr_t& want, const amount_t& have) con
 		left -= order.ask;
 	}
 	return price;
+}
+
+void Server::ping(const uint64_t& client) const
+{
 }
 
 bool Server::is_open(const txio_key_t& bid_key) const

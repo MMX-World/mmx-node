@@ -16,10 +16,10 @@
 #include <mmx/exchange/Server_execute_return.hxx>
 #include <mmx/exchange/Server_match.hxx>
 #include <mmx/exchange/Server_match_return.hxx>
+#include <mmx/exchange/Server_get_trade_pairs.hxx>
 #include <mmx/exchange/Server_get_orders.hxx>
-#include <mmx/exchange/Server_get_orders_return.hxx>
 #include <mmx/exchange/Server_get_price.hxx>
-#include <mmx/exchange/Server_get_price_return.hxx>
+#include <mmx/exchange/Server_ping.hxx>
 #include <mmx/solution/PubKey.hxx>
 #include <mmx/Request.hxx>
 
@@ -48,24 +48,53 @@ void Client::main()
 	node = std::make_shared<NodeClient>(node_server);
 	wallet = std::make_shared<WalletClient>(wallet_server);
 
+	http = std::make_shared<vnx::addons::HttpInterface<Client>>(this, vnx_name);
+	add_async_client(http);
+
 	threads = new vnx::ThreadPool(1);
 
+	set_timer_millis(10 * 1000, std::bind(&Client::update, this));
 	set_timer_millis(60 * 1000, std::bind(&Client::connect, this));
 
+	{
+		vnx::File file(storage_path + "offers.dat");
+		if(file.exists()) {
+			file.open("rb");
+			std::map<uint64_t, std::shared_ptr<OfferBundle>> offers;
+			vnx::read_generic(file.in, offers);
+			for(const auto& entry : offers) {
+				if(auto offer = entry.second) {
+					place(offer);
+				}
+			}
+		}
+	}
 	connect();
 
+	is_init = false;
 	Super::main();
-
-	std::unordered_map<uint32_t, std::vector<txio_key_t>> keys;
-	for(const auto& entry : order_map) {
-		keys[entry.second.wallet].push_back(entry.first);
-	}
-	for(const auto& entry : keys) {
-		try {
-			wallet->release(entry.first, entry.second);
-		} catch(...) {
-			break;
+	{
+		std::unordered_map<uint32_t, std::vector<txio_key_t>> keys;
+		for(const auto& entry : order_map) {
+			keys[entry.second.wallet].push_back(entry.first);
 		}
+		for(const auto& entry : keys) {
+			try {
+				wallet->release(entry.first, entry.second);
+			} catch(...) {
+				break;
+			}
+		}
+	}
+}
+
+void Client::update()
+{
+	// send keep alive
+	for(const auto& entry : avail_server_map) {
+		auto req = Request::create();
+		req->method = Server_ping::create();
+		send_to(entry.second, req);
 	}
 }
 
@@ -164,6 +193,7 @@ void Client::cancel_offer(const uint64_t& id)
 	}
 	offer_map.erase(iter);
 	wallet->release(offer->wallet, method->orders);
+	save_offers();
 }
 
 void Client::cancel_all()
@@ -228,6 +258,7 @@ std::vector<trade_order_t> Client::make_trade(const uint32_t& index, const trade
 	std::vector<trade_order_t> orders;
 	for(const auto& bundle : addr_map) {
 		trade_order_t order;
+		order.pair = pair;
 		if(ask) {
 			order.ask = uint64_t(0);
 		}
@@ -273,21 +304,30 @@ void Client::place(std::shared_ptr<const OfferBundle> offer)
 	for(const auto& entry : avail_server_map) {
 		send_offer(entry.second, offer);
 	}
+	next_offer_id = std::max(offer->id + 1, next_offer_id);
 	order_map.insert(offer->orders.begin(), offer->orders.end());
 	offer_map[offer->id] = vnx::clone(offer);
 
 	log(INFO) << "Placed offer " << offer->id << ", asking "
 			<< offer->ask << " [" << offer->pair.ask << "] for " << offer->bid << " [" << offer->pair.bid << "]"
 			<< " (" << avail_server_map.size() << " servers)";
-	if(avail_server_map.empty()) {
+
+	if(avail_server_map.empty() && !is_init) {
 		log(WARN) << "Not connected to any exchange servers at the moment!";
 	}
-
 	std::vector<txio_key_t> keys;
 	for(const auto& entry : offer->orders) {
 		keys.push_back(entry.first);
 	}
 	wallet->reserve(offer->wallet, keys);
+	save_offers();
+}
+
+void Client::save_offers() const
+{
+	vnx::File file(storage_path + "offers.dat");
+	file.open("wb");
+	vnx::write_generic(file.out, offer_map);
 }
 
 std::shared_ptr<const Transaction> Client::approve(std::shared_ptr<const Transaction> tx) const
@@ -356,7 +396,7 @@ void Client::execute_async(const std::string& server, const uint32_t& index, con
 	}
 }
 
-void Client::match_async(const std::string& server, const trade_pair_t& pair, const std::vector<trade_order_t>& orders, const vnx::request_id_t& request_id) const
+void Client::match_async(const std::string& server, const std::vector<trade_order_t>& orders, const vnx::request_id_t& request_id) const
 {
 	if(orders.empty()) {
 		match_async_return(request_id, {});
@@ -369,7 +409,6 @@ void Client::match_async(const std::string& server, const trade_pair_t& pair, co
 
 	for(const auto& order : orders) {
 		auto method = Server_match::create();
-		method->pair = pair;
 		method->order = order;
 		send_request(peer, method,
 			[this, job](std::shared_ptr<const vnx::Value> result) {
@@ -386,11 +425,19 @@ void Client::match_async(const std::string& server, const trade_pair_t& pair, co
 	}
 }
 
-void Client::get_orders_async(const std::string& server, const trade_pair_t& pair, const vnx::request_id_t& request_id) const
+void Client::get_trade_pairs_async(const std::string& server, const vnx::request_id_t& request_id) const
+{
+	auto peer = get_server(server);
+	auto method = Server_get_trade_pairs::create();
+	send_request(peer, method, std::bind(&Client::vnx_async_return, this, request_id, std::placeholders::_1));
+}
+
+void Client::get_orders_async(const std::string& server, const trade_pair_t& pair, const int32_t& limit, const vnx::request_id_t& request_id) const
 {
 	auto peer = get_server(server);
 	auto method = Server_get_orders::create();
 	method->pair = pair;
+	method->limit = limit;
 	send_request(peer, method, std::bind(&Client::vnx_async_return, this, request_id, std::placeholders::_1));
 }
 
@@ -611,6 +658,18 @@ std::shared_ptr<Client::peer_t> Client::get_server(const std::string& name) cons
 		}
 	}
 	throw std::logic_error("no such server");
+}
+
+void Client::http_request_async(std::shared_ptr<const vnx::addons::HttpRequest> request, const std::string& sub_path,
+								const vnx::request_id_t& request_id) const
+{
+	http->http_request(request, sub_path, request_id);
+}
+
+void Client::http_request_chunk_async(	std::shared_ptr<const vnx::addons::HttpRequest> request, const std::string& sub_path,
+										const int64_t& offset, const int64_t& max_bytes, const vnx::request_id_t& request_id) const
+{
+	throw std::logic_error("not implemented");
 }
 
 

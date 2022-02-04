@@ -18,6 +18,7 @@
 #include <mmx/txio_key_t.hpp>
 
 #include <vnx/ThreadPool.h>
+#include <vnx/addons/HttpInterface.h>
 
 
 namespace mmx {
@@ -67,15 +68,25 @@ protected:
 
 	void execute_async(const std::string& server, const uint32_t& wallet, const matched_order_t& order, const vnx::request_id_t& request_id) const override;
 
-	void match_async(const std::string& server, const trade_pair_t& pair, const std::vector<trade_order_t>& orders, const vnx::request_id_t& request_id) const override;
+	void match_async(const std::string& server, const std::vector<trade_order_t>& orders, const vnx::request_id_t& request_id) const override;
 
-	void get_orders_async(const std::string& server, const trade_pair_t& pair, const vnx::request_id_t& request_id) const override;
+	void get_trade_pairs_async(const std::string& server, const vnx::request_id_t& request_id) const override;
+
+	void get_orders_async(const std::string& server, const trade_pair_t& pair, const int32_t& limit, const vnx::request_id_t& request_id) const override;
 
 	void get_price_async(const std::string& server, const addr_t& want, const amount_t& have, const vnx::request_id_t& request_id) const override;
+
+	void http_request_async(std::shared_ptr<const vnx::addons::HttpRequest> request, const std::string& sub_path,
+							const vnx::request_id_t& request_id) const override;
+
+	void http_request_chunk_async(	std::shared_ptr<const vnx::addons::HttpRequest> request, const std::string& sub_path,
+									const int64_t& offset, const int64_t& max_bytes, const vnx::request_id_t& request_id) const override;
 
 	void handle(std::shared_ptr<const Block> block) override;
 
 private:
+	void update();
+
 	std::shared_ptr<OfferBundle> find_offer(const uint64_t& id) const;
 
 	void send_offer(uint64_t server, std::shared_ptr<const OfferBundle> offer);
@@ -88,6 +99,8 @@ private:
 							const std::function<void(std::shared_ptr<const vnx::Value>)>& callback = {}) const;
 
 	void connect();
+
+	void save_offers() const;
 
 	void add_peer(const std::string& address, const int sock);
 
@@ -118,6 +131,7 @@ private:
 	std::shared_ptr<peer_t> get_server(const std::string& name) const;
 
 private:
+	bool is_init = true;
 	std::shared_ptr<NodeClient> node;
 	std::shared_ptr<WalletClient> wallet;
 
@@ -131,9 +145,12 @@ private:
 	mutable std::unordered_map<uint32_t, std::function<void(std::shared_ptr<const vnx::Value>)>> return_map;
 
 	vnx::ThreadPool* threads = nullptr;
+	std::shared_ptr<vnx::addons::HttpInterface<Client>> http;
 
 	mutable uint32_t next_request_id = 0;
 	mutable uint64_t next_offer_id = 0;
+
+	friend class vnx::addons::HttpInterface<Client>;
 
 };
 

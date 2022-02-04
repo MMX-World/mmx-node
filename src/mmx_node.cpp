@@ -102,6 +102,7 @@ int main(int argc, char** argv)
 		}
 		{
 			vnx::Handle<mmx::exchange::Client> module = new mmx::exchange::Client("ExchClient");
+			module->storage_path = root_path + module->storage_path;
 			module.start_detached();
 		}
 		{
@@ -138,6 +139,7 @@ int main(int argc, char** argv)
 		module->components["/wapi/"] = "WebAPI";
 		module->components["/api/node/"] = "Node";
 		module->components["/api/wallet/"] = "Wallet";
+		module->components["/api/exchange/"] = "ExchClient";
 		module->components["/gui/"] = "FileServer_1";
 		module.start_detached();
 	}

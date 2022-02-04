@@ -52,6 +52,8 @@ protected:
 
 	void main() override;
 
+	void ping(const uint64_t& client) const override;
+
 	void cancel(const uint64_t& client, const std::vector<txio_key_t>& orders) override;
 
 	void reject(const uint64_t& client, const hash_t& txid) override;
@@ -62,9 +64,11 @@ protected:
 
 	void execute_async(std::shared_ptr<const Transaction> tx, const vnx::request_id_t& request_id) override;
 
-	void match_async(const trade_pair_t& pair, const trade_order_t& order, const vnx::request_id_t& request_id) const override;
+	void match_async(const trade_order_t& order, const vnx::request_id_t& request_id) const override;
 
-	std::vector<order_t> get_orders(const trade_pair_t& pair) const override;
+	std::vector<trade_pair_t> get_trade_pairs() const override;
+
+	std::vector<order_t> get_orders(const trade_pair_t& pair, const int32_t& limit) const override;
 
 	ulong_fraction_t get_price(const addr_t& want, const amount_t& have) const override;
 
