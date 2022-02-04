@@ -17,7 +17,7 @@ add_subdirectory(vnx-addons)
 add_subdirectory(vnx-rocksdb)
 add_subdirectory(libbech32)
 add_subdirectory(bls-signatures)
-add_subdirectory(exchange)
+
 
 if (NOT MSVC)
 find_package(OpenCL)
@@ -160,6 +160,8 @@ if(OpenCL_FOUND)
 	target_link_libraries(mmx_modules automy_basic_opencl)
 	target_compile_definitions(mmx_modules PUBLIC WITH_OPENCL)
 endif()
+
+add_subdirectory(exchange)
 
 add_executable(mmx src/mmx.cpp)
 add_executable(mmx_node src/mmx_node.cpp)
