@@ -154,14 +154,13 @@ if(MSVC)
 endif()
 
 target_link_libraries(mmx_iface uint256_t secp256k1 bech32 bls vnx_addons vnx_base)
+add_subdirectory(exchange)
 target_link_libraries(mmx_modules vnx_rocksdb mmx_chiapos mmx_iface mmx_exchange)
 
 if(OpenCL_FOUND)
 	target_link_libraries(mmx_modules automy_basic_opencl)
 	target_compile_definitions(mmx_modules PUBLIC WITH_OPENCL)
 endif()
-
-add_subdirectory(exchange)
 
 add_executable(mmx src/mmx.cpp)
 add_executable(mmx_node src/mmx_node.cpp)
