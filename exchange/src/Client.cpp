@@ -20,6 +20,7 @@
 #include <mmx/exchange/Server_get_orders.hxx>
 #include <mmx/exchange/Server_get_price.hxx>
 #include <mmx/exchange/Server_ping.hxx>
+#include <mmx/exchange/Server_reject.hxx>
 #include <mmx/solution/PubKey.hxx>
 #include <mmx/Request.hxx>
 
@@ -64,15 +65,44 @@ void Client::main()
 			vnx::read_generic(file.in, offers);
 			for(const auto& entry : offers) {
 				if(auto offer = entry.second) {
-					place(offer);
+					if(offer->bid_sold < offer->bid) {
+						place(offer);
+					}
 				}
 			}
 		}
 	}
+
+	trade_log = std::make_shared<vnx::File>(storage_path + "trade_log.dat");
+	if(trade_log->exists()) {
+		int64_t offset = 0;
+		trade_log->open("rb+");
+		while(true) {
+			try {
+				offset = trade_log->get_input_pos();
+				if(auto value = vnx::read(trade_log->in)) {
+					if(auto trade = std::dynamic_pointer_cast<LocalTrade>(value)) {
+						trade_history.emplace(trade->height, trade);
+					}
+				} else {
+					break;
+				}
+			} catch(const std::exception& ex) {
+				log(WARN) << ex.what();
+				break;
+			}
+		}
+		trade_log->seek_to(offset);
+	} else {
+		trade_log->open("wb");
+	}
+
 	connect();
 
 	is_init = false;
 	Super::main();
+
+	save_offers();
 	{
 		std::unordered_map<uint32_t, std::vector<txio_key_t>> keys;
 		for(const auto& entry : order_map) {
@@ -86,6 +116,10 @@ void Client::main()
 			}
 		}
 	}
+	{
+		vnx::write(trade_log->out, nullptr);
+		trade_log->close();
+	}
 }
 
 void Client::update()
@@ -95,6 +129,9 @@ void Client::update()
 		auto req = Request::create();
 		req->method = Server_ping::create();
 		send_to(entry.second, req);
+	}
+	while(trade_history.size() > max_trade_history) {
+		trade_history.erase(trade_history.begin());
 	}
 }
 
@@ -106,23 +143,66 @@ void Client::handle(std::shared_ptr<const Block> block)
 	std::unordered_map<uint32_t, std::vector<txio_key_t>> sold_map;
 	for(const auto& base : block->tx_list) {
 		if(auto tx = std::dynamic_pointer_cast<const Transaction>(base)) {
-			for(const auto& in : tx->inputs) {
-				auto iter = order_map.find(in.prev);
-				if(iter != order_map.end()) {
-					const auto& order = iter->second;
-					if(auto offer = find_offer(order.offer_id)) {
-						offer->bid_sold += order.bid.amount;
-						offer->received += order.ask.amount;
-						sold_map[offer->wallet].push_back(in.prev);
+			if(pending_approvals.count(tx->id)) {
+				std::map<uint64_t, std::shared_ptr<LocalTrade>> trade_map;
+				for(const auto& in : tx->inputs) {
+					auto iter = order_map.find(in.prev);
+					if(iter != order_map.end()) {
+						const auto& order = iter->second;
+						if(auto offer = find_offer(order.offer_id)) {
+							offer->bid_sold += order.bid.amount;
+							offer->received += order.ask.amount;
+							sold_map[offer->wallet].push_back(in.prev);
+						}
+						auto& trade = trade_map[order.offer_id];
+						if(!trade) {
+							trade = LocalTrade::create();
+							trade->id = tx->id;
+							trade->height = block->height;
+							trade->pair.bid = order.bid.contract;
+							trade->pair.ask = order.ask.currency;
+							trade->offer_id = order.offer_id;
+						}
+						trade->bid += order.bid.amount;
+						trade->ask += order.ask.amount;
+						order_map.erase(iter);
 					}
-					log(INFO) << "Sold " << order.bid.amount << " [" << order.bid.contract << "] for " << order.ask.amount << " [" << order.ask.currency << "]";
-					order_map.erase(iter);
+				}
+				for(const auto& entry : trade_map) {
+					const auto trade = entry.second;
+					try {
+						vnx::write(trade_log->out, trade);
+						trade_log->flush();
+					} catch(const std::exception& ex) {
+						log(WARN) << ex.what();
+					}
+					trade_history.emplace(trade->height, trade);
+					log(INFO) << "Sold " << trade->bid << " [" << trade->pair.bid << "] for " << trade->ask << " [" << trade->pair.ask << "]";
+				}
+				pending_approvals.erase(tx->id);
+			}
+			{
+				auto iter = pending_trades.find(tx->id);
+				if(iter != pending_trades.end()) {
+					auto trade = iter->second;
+					trade->height = block->height;
+					try {
+						vnx::write(trade_log->out, trade);
+						trade_log->flush();
+					} catch(const std::exception& ex) {
+						log(WARN) << ex.what();
+					}
+					trade_history.emplace(trade->height, trade);
+					pending_trades.erase(iter);
 				}
 			}
 		}
 	}
 	for(const auto& entry : sold_map) {
 		wallet->release(entry.first, entry.second);
+	}
+	if(!sold_map.empty()) {
+		save_offers();
 	}
 }
 
@@ -169,6 +249,31 @@ std::vector<std::shared_ptr<const OfferBundle>> Client::get_all_offers() const
 	return res;
 }
 
+std::vector<std::shared_ptr<const LocalTrade>>
+Client::get_local_history(const vnx::optional<trade_pair_t>& pair, const int32_t& limit) const
+{
+	const trade_pair_t reverse = pair ? pair->reverse() : trade_pair_t();
+
+	std::vector<std::shared_ptr<const LocalTrade>> res;
+	for(const auto& entry : trade_history) {
+		const auto& trade = entry.second;
+		if(!pair || trade->pair == *pair || trade->pair == reverse) {
+			res.push_back(trade);
+		}
+	}
+	for(const auto& entry : pending_trades) {
+		const auto& trade = entry.second;
+		if(!pair || trade->pair == *pair || trade->pair == reverse) {
+			res.push_back(trade);
+		}
+	}
+	std::reverse(res.begin(), res.end());
+	if(res.size() > size_t(limit)) {
+		res.resize(limit);
+	}
+	return res;
+}
+
 void Client::cancel_offer(const uint64_t& id)
 {
 	auto iter = offer_map.find(id);
@@ -178,8 +283,8 @@ void Client::cancel_offer(const uint64_t& id)
 	auto offer = iter->second;
 	auto method = Server_cancel::create();
 	for(const auto& order : offer->limit_orders) {
-		for(const auto& key : order.bid_keys) {
-			method->orders.push_back(key);
+		for(const auto& entry : order.bids) {
+			method->orders.push_back(entry.first);
 		}
 	}
 	for(const auto& entry : avail_server_map) {
@@ -232,14 +337,11 @@ std::shared_ptr<const OfferBundle> Client::make_offer(const uint32_t& index, con
 		offer->orders.emplace_back(entry.key, order);
 		addr_map[utxo.address].emplace_back(entry.key, order.ask.amount);
 	}
-	for(const auto& bundle : addr_map) {
+	for(const auto& entry : addr_map) {
 		limit_order_t order;
-		for(const auto& entry : bundle.second) {
-			order.ask += entry.second;
-			order.bid_keys.push_back(entry.first);
-		}
+		order.bids = entry.second;
 		const auto hash = order.calc_hash();
-		order.solution = wallet->sign_msg(index, bundle.first, hash);
+		order.solution = wallet->sign_msg(index, entry.first, hash);
 		offer->limit_orders.push_back(order);
 	}
 	return offer;
@@ -301,12 +403,15 @@ void Client::place(std::shared_ptr<const OfferBundle> offer)
 	if(!offer->bid || !offer->ask) {
 		throw std::logic_error("empty offer");
 	}
+	// TODO: check bid keys (discard empty offers)
+
 	for(const auto& entry : avail_server_map) {
 		send_offer(entry.second, offer);
 	}
 	next_offer_id = std::max(offer->id + 1, next_offer_id);
 	order_map.insert(offer->orders.begin(), offer->orders.end());
 	offer_map[offer->id] = vnx::clone(offer);
+	save_offers();
 
 	log(INFO) << "Placed offer " << offer->id << ", asking "
 			<< offer->ask << " [" << offer->pair.ask << "] for " << offer->bid << " [" << offer->pair.bid << "]"
@@ -320,14 +425,18 @@ void Client::place(std::shared_ptr<const OfferBundle> offer)
 		keys.push_back(entry.first);
 	}
 	wallet->reserve(offer->wallet, keys);
-	save_offers();
 }
 
 void Client::save_offers() const
 {
-	vnx::File file(storage_path + "offers.dat");
-	file.open("wb");
-	vnx::write_generic(file.out, offer_map);
+	try {
+		vnx::File file(storage_path + "offers.dat");
+		file.open("wb");
+		vnx::write_generic(file.out, offer_map);
+	}
+	catch(const std::exception& ex) {
+		log(WARN) << ex.what();
+	}
 }
 
 std::shared_ptr<const Transaction> Client::approve(std::shared_ptr<const Transaction> tx) const
@@ -353,7 +462,8 @@ std::shared_ptr<const Transaction> Client::approve(std::shared_ptr<const Transac
 	for(const auto& entry : expect_amount) {
 		auto iter = output_amount.find(entry.first);
 		if(iter == output_amount.end() || iter->second < entry.second) {
-			throw std::logic_error("expected amount: " + std::to_string(entry.second) + " [" + entry.first.to_string() + "]");
+			const uint64_t amount = iter != output_amount.end() ? iter->second : 0;
+			throw std::logic_error("expected amount: " + std::to_string(entry.second) + " != " + std::to_string(amount) + " [" + entry.first.to_string() + "]");
 		}
 	}
 	auto out = vnx::clone(tx);
@@ -364,6 +474,7 @@ std::shared_ptr<const Transaction> Client::approve(std::shared_ptr<const Transac
 			throw std::logic_error("unable to sign off");
 		}
 	}
+	pending_approvals.insert(tx->id);
 	log(INFO) << "Accepted trade " << tx->id;
 	return out;
 }
@@ -379,16 +490,32 @@ void Client::execute_async(const std::string& server, const uint32_t& index, con
 		}
 		wallet->reserve(index, keys);
 
+		auto trade = LocalTrade::create();
+		trade->id = tx->id;
+		trade->pair = order.pair;
+		trade->bid = order.bid;
+		trade->ask = order.ask;
+
 		auto method = Server_execute::create();
 		method->tx = tx;
 		send_request(peer, method,
-			[this, request_id, index, keys, tx](std::shared_ptr<const vnx::Value> result) {
+			[this, request_id, index, keys, trade, tx](std::shared_ptr<const vnx::Value> result) {
 				wallet->release(index, keys);
 				if(auto ex = std::dynamic_pointer_cast<const vnx::Exception>(result)) {
 					vnx_async_return(request_id, ex);
+					try {
+						trade->failed = true;
+						trade->message = ex->what;
+						vnx::write(trade_log->out, trade);
+						trade_log->flush();
+					} catch(const std::exception& ex) {
+						log(WARN) << ex.what();
+					}
+					trade_history.emplace(trade->height, trade);
 				} else {
 					wallet->mark_spent(index, keys);
 					execute_async_return(request_id, tx->id);
+					pending_trades[tx->id] = trade;
 				}
 			});
 	} else {
@@ -564,16 +691,18 @@ void Client::on_msg(uint64_t client, std::shared_ptr<const vnx::Value> msg)
 		break;
 	case Client_approve::VNX_TYPE_ID:
 		if(auto value = std::dynamic_pointer_cast<const Client_approve>(msg)) {
-			try {
-				auto ret = Client_approve_return::create();
-				ret->_ret_0 = approve(value->tx);
-				send_to(client, ret);
-			}
-			catch(const std::exception& ex) {
-				auto ret = vnx::Exception::create();
-				ret->what = ex.what();
-				send_to(client, ret);
-				log(WARN) << "approve() failed with: " << ex.what();
+			if(auto tx = value->tx) {
+				try {
+					auto ret = Client_approve_return::create();
+					ret->_ret_0 = approve(tx);
+					send_to(client, ret);
+				}
+				catch(const std::exception& ex) {
+					auto ret = Server_reject::create();
+					ret->txid = tx->id;
+					send_to(client, ret);
+					log(WARN) << "approve() failed with: " << ex.what();
+				}
 			}
 		}
 		break;

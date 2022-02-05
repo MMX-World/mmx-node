@@ -3,8 +3,12 @@ app.component('exchange-menu', {
 	props: {
 		server_: String,
 		bid_: String,
-		ask_: String
+		ask_: String,
+		page: String
 	},
+	emits: [
+		"update-wallet", "update-bid-symbol", "update-ask-symbol"
+	],
 	data() {
 		return {
 			servers: [],
@@ -14,6 +18,8 @@ app.component('exchange-menu', {
 			pairs: [],
 			bid_pairs: [],
 			ask_pairs: [],
+			bid_symbol_map: null,
+			ask_symbol_map: null,
 			bid: null,
 			ask: null,
 		}
@@ -37,9 +43,18 @@ app.component('exchange-menu', {
 					}
 				});
 		},
-		submit() {
+		submit(page) {
 			if(this.server && this.bid && this.ask) {
-				this.$router.push('/exchange/market/' + this.server + '/' + this.bid + '/' + this.ask);
+				if(!page) {
+					if(this.page) {
+						page = this.page;
+					} else {
+						page = "market";
+					}
+				}
+				this.$router.push('/exchange/' + page + '/' + this.server + '/' + this.bid + '/' + this.ask);
+				this.$emit('update-bid-symbol', this.bid_symbol_map.get(this.bid));
+				this.$emit('update-ask-symbol', this.bid_symbol_map.get(this.ask));
 			}
 		}
 	},
@@ -55,31 +70,36 @@ app.component('exchange-menu', {
 				.then(response => response.json())
 				.then(data => {
 					this.pairs = data;
-					let set = [];
 					let list = [];
+					let map = new Map();
 					for(const item of data) {
-						if(set.indexOf(item.bid) < 0) {
-							set.push(item.bid);
+						if(!map.has(item.bid)) {
+							map.set(item.bid, item.bid_symbol);
 							list.push({currency: item.bid, symbol: item.bid_symbol});
 						}
 					}
 					this.bid_pairs = list;
+					this.bid_symbol_map = map;
 					if(!this.bid && this.bid_) {
 						this.bid = this.bid_;
 					}
 					this.submit();
 				});
 		},
+		wallet(value) {
+			this.$emit('update-wallet', value);
+		},
 		bid(value) {
-			let set = [];
 			let list = [];
+			let map = new Map();
 			for(const item of this.pairs) {
-				if(item.bid == this.bid && set.indexOf(item.ask) < 0) {
-					set.push(item.ask);
+				if(item.bid == this.bid && !map.has(item.ask)) {
+					map.set(item.ask, item.ask_symbol);
 					list.push({currency: item.ask, symbol: item.ask_symbol});
 				}
 			}
 			this.ask_pairs = list;
+			this.ask_symbol_map = map;
 			if(!this.ask && this.ask_) {
 				this.ask = this.ask_;
 			} else if(list.length == 1) {
@@ -92,7 +112,7 @@ app.component('exchange-menu', {
 		}
 	},
 	template: `
-		<div class="ui form raised segment">
+		<div class="ui form segment">
 			<div class="two fields">
 				<div class="field">
 					<label>Server</label>
@@ -124,6 +144,12 @@ app.component('exchange-menu', {
 				</select>
 			</div>
 		</div>
+		<div class="ui large pointing menu">
+			<a class="item" :class="{active: $route.meta.page == 'market'}" @click="submit('market')">Market</a>
+			<a class="item" :class="{active: $route.meta.page == 'trades'}">Trades</a>
+			<a class="item" :class="{active: $route.meta.page == 'history'}" @click="submit('history')">History</a>
+			<a class="item" :class="{active: $route.meta.page == 'offers'}">Offers</a>
+		</div>
 		`
 })
 
@@ -138,7 +164,8 @@ app.component('exchange-order-list', {
 	},
 	data() {
 		return {
-			data: []
+			data: [],
+			timer: null
 		}
 	},
 	methods: {
@@ -151,7 +178,11 @@ app.component('exchange-order-list', {
 		}
 	},
 	created() {
-		this.update()
+		this.update();
+		this.timer = setInterval(() => { this.update(); }, 30000);
+	},
+	unmounted() {
+		clearInterval(this.timer);
 	},
 	template: `
 		<table class="ui table striped">
@@ -162,9 +193,7 @@ app.component('exchange-order-list', {
 			</thead>
 			<tbody>
 				<tr v-for="item in data.orders">
-					<td>
-						{{flip ? item.inv_price : item.price}}
-					</td>
+					<td>{{flip ? item.inv_price : item.price}}</td>
 					<td>{{flip ? item.ask_value : item.bid_value}}</td>
 					<td>{{flip ? data.ask_symbol : data.bid_symbol}}</td>
 				</tr>
@@ -187,19 +216,197 @@ app.component('exchange-orders', {
 		}
 	},
 	template: `
-		<div class="ui segment">
-			<div class="ui two column grid">
-				<div class="column">
-					<exchange-order-list title="Buy" :server="server" :bid="bid" :ask="ask" :flip="false" :limit="limit" ref="bid_list"></exchange-order-list>
-				</div>
-				<div class="column">
-					<exchange-order-list title="Sell" :server="server" :bid="ask" :ask="bid" :flip="true" :limit="limit" ref="ask_list"></exchange-order-list>
-				</div>
+		<div class="ui two column grid">
+			<div class="column">
+				<exchange-order-list title="Buy -" :server="server" :bid="bid" :ask="ask" :flip="false" :limit="limit" ref="bid_list"></exchange-order-list>
+			</div>
+			<div class="column">
+				<exchange-order-list title="Sell -" :server="server" :bid="ask" :ask="bid" :flip="true" :limit="limit" ref="ask_list"></exchange-order-list>
 			</div>
 		</div>
 		`
 })
 
+app.component('exchange-history', {
+	props: {
+		bid: String,
+		ask: String,
+		limit: Number
+	},
+	data() {
+		return {
+			data: [],
+			timer: null
+		}
+	},
+	methods: {
+		update() {
+			fetch('/wapi/exchange/history?limit=' + this.limit + '&bid=' + this.bid + '&ask=' + this.ask)
+				.then(response => response.json())
+				.then(data => this.data = data);
+		}
+	},
+	created() {
+		this.update();
+		this.timer = setInterval(() => { this.update(); }, 30000);
+	},
+	unmounted() {
+		clearInterval(this.timer);
+	},
+	template: `
+		<table class="ui table striped">
+			<thead>
+				<th>Type</th>
+				<th>Bid</th>
+				<th>Token</th>
+				<th>Ask</th>
+				<th>Token</th>
+				<th>Offer</th>
+				<th>Height</th>
+				<th>Time</th>
+			</thead>
+			<tbody>
+				<tr v-for="item in data">
+					<td>{{item.pair.bid == bid ? "SELL" : "BUY"}}</td>
+					<td>{{item.pair.bid == bid ? item.bid_value : item.ask_value}}</td>
+					<td>{{item.pair.bid == bid ? item.bid_symbol : item.ask_symbol}}</td>
+					<td>{{item.pair.bid == bid ? item.ask_value : item.bid_value}}</td>
+					<td>{{item.pair.bid == bid ? item.ask_symbol : item.bid_symbol}}</td>
+					<td>{{item.offer_id}}</td>
+					<td>{{item.failed ? "(failed)" : (item.height ? item.height : "(pending)")}}</td>
+					<td>{{item.time ? new Date(item.time * 1000).toLocaleString() : "(pending)"}}</td>
+				</tr>
+			</tbody>
+		</table>
+		`
+})
 
+app.component('exchange-trade-form', {
+	props: {
+		server: String,
+		wallet: Number,
+		bid_symbol: String,
+		ask_symbol: String,
+		bid_currency: String,
+		ask_currency: String,
+	},
+	emits: [
+		"trade-executed"
+	],
+	data() {
+		return {
+			balance: null,
+			bid_amount: null,
+			ask_amount: null,
+			confirmed: false,
+			timer: null
+		}
+	},
+	methods: {
+		update() {
+			fetch('/wapi/wallet/balance?index=' + this.wallet + '&currency=' + this.bid_currency)
+				.then(response => response.json())
+				.then(data => {
+					if(data.balances.length) {
+						this.balance = data.balances[0].spendable;
+					} else {
+						this.balance = 0;
+					}
+				});
+		},
+		submit() {
+			this.confirmed = false;
+			const req = {};
+			req.server = this.server;
+			req.wallet = this.wallet;
+			const pair = {};
+			pair.bid = this.bid_currency;
+			pair.ask = this.ask_currency;
+			req.pair = pair;
+			req.bid = this.bid_amount;
+			fetch('/wapi/exchange/trade', {body: JSON.stringify(req), method: "post"})
+				.then(response => {
+					if(response.ok) {
+						response.json().then(data => {
+							if(data.length) {
+								alert("TX IDs: " + JSON.stringify(data));
+								this.$emit('trade-executed', data);
+								this.update();
+							} else {
+								alert("Trade failed! (Most likely no offers available or bid amount too low)")
+							}
+						});
+					} else {
+						response.text().then(data => {
+							alert("Failed with: " + data)
+						});
+					}
+				});
+		}
+	},
+	created() {
+		this.update();
+		this.timer = setInterval(() => { this.update(); }, 10000);
+	},
+	mounted() {
+		$('.ui.checkbox').checkbox();
+	},
+	unmounted() {
+		clearInterval(this.timer);
+	},
+	watch: {
+		wallet() {
+			this.update();
+		},
+		bid_amount(value) {
+			fetch('/wapi/exchange/price?server=' + this.server + '&bid=' + this.bid_currency + '&ask=' + this.ask_currency + '&amount=' + value)
+				.then(response => {
+					if(response.ok) {
+						response.json().then(data => {
+							this.ask_amount = (this.bid_amount * data.price).toPrecision(6);
+						});
+					} else {
+						this.ask_amount = "???";
+					}
+				});
+		}
+	},
+	template: `
+		<div class="ui segment">
+		<form class="ui form" id="form">
+			<div class="two fields">
+				<div class="field">
+					<label>Bid Amount</label>
+					<div class="ui right labeled input">
+						<input type="text" v-model.number.lazy="bid_amount" placeholder="1.23" style="text-align: right"/>
+						<div class="ui basic label">
+							{{bid_symbol}}
+						</div>
+					</div>
+				</div>
+				<div class="field">
+					<label>Receive (estimated)</label>
+					<div class="ui right labeled input field">
+						<input type="text" v-model="ask_amount" style="text-align: right" disabled/>
+						<div class="ui basic label">
+							{{ask_symbol}}
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="inline field">
+				<div class="ui checkbox">
+					<input type="checkbox" v-model="confirmed">
+					<label>Confirm</label>
+				</div>
+			</div>
+			<div @click="submit" class="ui submit primary button" :class="{disabled: !confirmed}" id="submit">Trade</div>
+		</form>
+		<div class="ui bottom right attached large label">
+			Balance: {{balance}} {{bid_symbol}}
+		</div>
+		</div>
+		`
+})
 
 

@@ -8,6 +8,7 @@
 #include <mmx/exchange/Server.h>
 #include <mmx/exchange/Client_approve.hxx>
 #include <mmx/exchange/Client_approve_return.hxx>
+#include <mmx/exchange/Server_reject.hxx>
 #include <mmx/solution/PubKey.hxx>
 
 
@@ -186,7 +187,11 @@ void Server::place_async(const uint64_t& client, const trade_pair_t& pair, const
 	const auto address = solution->pubkey.get_addr();
 	addr_map[address] = client;
 
-	node->get_txo_infos(order.bid_keys,
+	std::vector<txio_key_t> keys;
+	for(const auto& entry : order.bids) {
+		keys.push_back(entry.first);
+	}
+	node->get_txo_infos(keys,
 		[this, peer, pair, address, order, request_id](const std::vector<vnx::optional<txo_info_t>>& entries) {
 			for(const auto& entry : entries) {
 				if(!entry) {
@@ -196,18 +201,19 @@ void Server::place_async(const uint64_t& client, const trade_pair_t& pair, const
 			}
 			uint64_t total_bid = 0;
 			std::vector<order_t> result;
-			for(size_t i = 0; i < entries.size() && i < order.bid_keys.size(); ++i) {
+			for(size_t i = 0; i < entries.size() && i < order.bids.size(); ++i) {
 				if(const auto& entry = entries[i]) {
 					const auto& utxo = entry->output;
-					const auto& bid_key = order.bid_keys[i];
+					const auto& bid = order.bids[i];
 					if(!entry->spent
 						&& utxo.address == address
 						&& utxo.contract == pair.bid
-						&& utxo_map.emplace(bid_key, utxo).second)
+						&& utxo_map.emplace(bid.first, utxo).second)
 					{
 						order_t tmp;
+						tmp.ask = bid.second;
 						tmp.bid = utxo.amount;
-						tmp.bid_key = bid_key;
+						tmp.bid_key = bid.first;
 						result.push_back(tmp);
 					}
 					total_bid += utxo.amount;
@@ -221,13 +227,11 @@ void Server::place_async(const uint64_t& client, const trade_pair_t& pair, const
 			if(!book) {
 				book = std::make_shared<order_book_t>();
 			}
-			const auto price = order.ask / double(total_bid);
-			for(auto& tmp : result) {
-				tmp.ask = tmp.bid * price;
-				const auto price = tmp.get_price();
-				book->key_map[tmp.bid_key] = price;
-				book->orders.emplace(price, tmp);
-				peer->order_map[tmp.bid_key] = pair;
+			for(const auto& entry : result) {
+				const auto price = entry.get_price();
+				book->key_map[entry.bid_key] = price;
+				book->orders.emplace(price, entry);
+				peer->order_map[entry.bid_key] = pair;
 			}
 			place_async_return(request_id, result);
 		},
@@ -567,6 +571,15 @@ void Server::on_msg(uint64_t client, std::shared_ptr<const vnx::Value> msg)
 	case Return::VNX_TYPE_ID:
 		if(auto value = std::dynamic_pointer_cast<const Return>(msg)) {
 			on_return(client, value);
+		}
+		break;
+	case Server_reject::VNX_TYPE_ID:
+		if(auto value = std::dynamic_pointer_cast<const Server_reject>(msg)) {
+			try {
+				reject(client, value->txid);
+			} catch(const std::exception& ex) {
+				log(WARN) << "reject() failed with: " << ex.what();
+			}
 		}
 		break;
 	case Client_approve_return::VNX_TYPE_ID:

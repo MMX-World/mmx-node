@@ -100,7 +100,8 @@ app.component('account-balance', {
 	},
 	data() {
 		return {
-			balances: []
+			balances: [],
+			timer: null
 		}
 	},
 	methods: {
@@ -111,7 +112,11 @@ app.component('account-balance', {
 		}
 	},
 	created() {
-		this.update()
+		this.update();
+		this.timer = setInterval(() => { this.update(); }, 30000);
+	},
+	unmounted() {
+		clearInterval(this.timer);
 	},
 	template: `
 		<table class="ui table">
@@ -203,7 +208,8 @@ app.component('account-history', {
 	},
 	data() {
 		return {
-			data: []
+			data: [],
+			timer: null
 		}
 	},
 	methods: {
@@ -214,7 +220,11 @@ app.component('account-history', {
 		}
 	},
 	created() {
-		this.update()
+		this.update();
+		this.timer = setInterval(() => { this.update(); }, 60000);
+	},
+	unmounted() {
+		clearInterval(this.timer);
 	},
 	template: `
 		<table class="ui table striped">
@@ -504,7 +514,8 @@ app.component('account-offer-form', {
 			ask_amount: null,
 			ask_symbol: "MMX",
 			ask_currency: null,
-			confirmed: false
+			confirmed: false,
+			timer: null
 		}
 	},
 	methods: {
@@ -512,6 +523,10 @@ app.component('account-offer-form', {
 			fetch('/wapi/wallet/balance?index=' + this.index)
 				.then(response => response.json())
 				.then(data => this.balances = data.balances);
+		},
+		update_balance() {
+			this.update();
+			this.$refs.balance.update();
 		},
 		submit() {
 			this.confirmed = false;
@@ -549,13 +564,15 @@ app.component('account-offer-form', {
 		}
 	},
 	created() {
-		this.update()
+		this.update();
+		this.timer = setInterval(() => { this.update(); }, 30000);
 	},
 	mounted() {
-		$('#bid_select').dropdown({
-			onChange: function(value, text) {}
-		});
+		$('.ui.dropdown').dropdown();
 		$('.ui.checkbox').checkbox();
+	},
+	unmounted() {
+		clearInterval(this.timer);
 	},
 	watch: {
 		ask_amount(value) {
@@ -635,7 +652,7 @@ app.component('account-offer-form', {
 			<div @click="submit" class="ui submit primary button disabled" id="submit">Offer</div>
 		</form>
 		</div>
-		<account-offers :index="index" ref="offers"></account-offers>
+		<account-offers @offer-cancel="update_balance" :index="index" ref="offers"></account-offers>
 		`
 })
 
@@ -643,9 +660,13 @@ app.component('account-offers', {
 	props: {
 		index: Number
 	},
+	emits: [
+		"offer-cancel"
+	],
 	data() {
 		return {
-			data: []
+			data: [],
+			timer: null
 		}
 	},
 	methods: {
@@ -656,11 +677,18 @@ app.component('account-offers', {
 		},
 		cancel(id) {
 			fetch('/api/exchange/cancel_offer?id=' + id)
-				.then(response => this.update());
+				.then(response => {
+					this.update();
+					this.$emit('offer-cancel', id);
+				});
 		}
 	},
 	created() {
-		this.update()
+		this.update();
+		this.timer = setInterval(() => { this.update(); }, 30000);
+	},
+	unmounted() {
+		clearInterval(this.timer);
 	},
 	template: `
 		<table class="ui table striped">
@@ -682,7 +710,7 @@ app.component('account-offers', {
 				<td>{{item.bid_symbol}}</td>
 				<td>{{item.ask_value}}</td>
 				<td>{{item.ask_symbol}}</td>
-				<td>{{100 * item.bid_sold / item.bid}} %</td>
+				<td>{{(100 * item.bid_sold / item.bid).toPrecision(3)}} %</td>
 				<td>
 					<div class="ui tiny compact button" @click="cancel(item.id)">Cancel</div>
 				</td>
