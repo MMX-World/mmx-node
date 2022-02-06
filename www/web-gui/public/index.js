@@ -131,6 +131,44 @@ const ExchangeHistory = {
 		<exchange-history :bid="$route.params.bid" :ask="$route.params.ask" :limit="200"></exchange-history>
 		`
 }
+const ExchangeOffers = {
+	props: {
+		wallet: null,
+		bid_symbol: null,
+		ask_symbol: null
+	},
+	methods: {
+		update_created() {
+			this.$refs.orders.update();
+			this.$refs.offers.update();
+		},
+		update_cancel() {
+			this.$refs.orders.update();
+			this.$refs.bid_form.update();
+			this.$refs.ask_form.update();
+		}
+	},
+	template: `
+		<div class="ui two column grid">
+			<div class="column">
+				<exchange-offer-form ref="bid_form" @offer-created="update_created"
+					:wallet="wallet" :server="$route.params.server"
+					:bid_symbol="bid_symbol" :ask_symbol="ask_symbol" :flip="false"
+					:bid_currency="$route.params.bid" :ask_currency="$route.params.ask">
+				</exchange-offer-form>
+			</div>
+			<div class="column">
+				<exchange-offer-form ref="ask_form" @offer-created="update_created"
+					:wallet="wallet" :server="$route.params.server"
+					:bid_symbol="ask_symbol" :ask_symbol="bid_symbol" :flip="true"
+					:bid_currency="$route.params.ask" :ask_currency="$route.params.bid">
+				</exchange-offer-form>
+			</div>
+		</div>
+		<exchange-orders ref="orders" :server="$route.params.server" :bid="$route.params.bid" :ask="$route.params.ask" :limit="5"></exchange-orders>
+		<account-offers ref="offers" @offer-cancel="update_cancel" :index="wallet" :bid="$route.params.bid" :ask="$route.params.ask"></account-offers>
+		`
+}
 
 const Settings = { template: '<h1>Settings</h1>TODO' }
 
@@ -156,6 +194,7 @@ const routes = [
 		children: [
 			{ path: 'market/:server/:bid/:ask', component: ExchangeMarket, meta: { page: 'market' } },
 			{ path: 'history/:server/:bid/:ask', component: ExchangeHistory, meta: { page: 'history' } },
+			{ path: 'offers/:server/:bid/:ask', component: ExchangeOffers, meta: { page: 'offers' } },
 		]
 	},
 	{ path: '/settings', component: Settings },

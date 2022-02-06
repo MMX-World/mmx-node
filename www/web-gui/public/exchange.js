@@ -148,7 +148,7 @@ app.component('exchange-menu', {
 			<a class="item" :class="{active: $route.meta.page == 'market'}" @click="submit('market')">Market</a>
 			<a class="item" :class="{active: $route.meta.page == 'trades'}">Trades</a>
 			<a class="item" :class="{active: $route.meta.page == 'history'}" @click="submit('history')">History</a>
-			<a class="item" :class="{active: $route.meta.page == 'offers'}">Offers</a>
+			<a class="item" :class="{active: $route.meta.page == 'offers'}" @click="submit('offers')">Offers</a>
 		</div>
 		`
 })
@@ -159,7 +159,6 @@ app.component('exchange-order-list', {
 		ask: String,
 		server: String,
 		flip: Boolean,
-		title: String,
 		limit: Number
 	},
 	data() {
@@ -187,14 +186,20 @@ app.component('exchange-order-list', {
 	template: `
 		<table class="ui table striped">
 			<thead>
-				<th>{{title}} [{{flip ? data.bid_symbol : data.ask_symbol}} / {{flip ? data.ask_symbol : data.bid_symbol}}]</th>
-				<th>Amount</th>
-				<th>Token</th>
+				<th>Price</th>
+				<th></th>
+				<th>{{flip ? "Bid" : "Ask"}}</th>
+				<th></th>
+				<th>{{flip ? "Ask" : "Bid"}}</th>
+				<th></th>
 			</thead>
 			<tbody>
 				<tr v-for="item in data.orders">
-					<td>{{flip ? item.inv_price : item.price}}</td>
-					<td>{{flip ? item.ask_value : item.bid_value}}</td>
+					<td class="collapsing"><b>{{flip ? item.inv_price : item.price}}</b></td>
+					<td>{{flip ? data.bid_symbol : data.ask_symbol}} / {{flip ? data.ask_symbol : data.bid_symbol}}</td>
+					<td class="collapsing"><b>{{flip ? item.bid_value : item.ask_value}}</b></td>
+					<td>{{flip ? data.bid_symbol : data.ask_symbol}}</td>
+					<td class="collapsing"><b>{{flip ? item.ask_value : item.bid_value}}</b></td>
 					<td>{{flip ? data.ask_symbol : data.bid_symbol}}</td>
 				</tr>
 			</tbody>
@@ -218,10 +223,10 @@ app.component('exchange-orders', {
 	template: `
 		<div class="ui two column grid">
 			<div class="column">
-				<exchange-order-list title="Buy -" :server="server" :bid="bid" :ask="ask" :flip="false" :limit="limit" ref="bid_list"></exchange-order-list>
+				<exchange-order-list :server="server" :bid="bid" :ask="ask" :flip="false" :limit="limit" ref="bid_list"></exchange-order-list>
 			</div>
 			<div class="column">
-				<exchange-order-list title="Sell -" :server="server" :bid="ask" :ask="bid" :flip="true" :limit="limit" ref="ask_list"></exchange-order-list>
+				<exchange-order-list :server="server" :bid="ask" :ask="bid" :flip="true" :limit="limit" ref="ask_list"></exchange-order-list>
 			</div>
 		</div>
 		`
@@ -258,9 +263,11 @@ app.component('exchange-history', {
 			<thead>
 				<th>Type</th>
 				<th>Bid</th>
-				<th>Token</th>
+				<th></th>
 				<th>Ask</th>
-				<th>Token</th>
+				<th></th>
+				<th>Price</th>
+				<th></th>
 				<th>Offer</th>
 				<th>Height</th>
 				<th>Time</th>
@@ -268,13 +275,15 @@ app.component('exchange-history', {
 			<tbody>
 				<tr v-for="item in data">
 					<td>{{item.pair.bid == bid ? "SELL" : "BUY"}}</td>
-					<td>{{item.pair.bid == bid ? item.bid_value : item.ask_value}}</td>
+					<td class="collapsing"><b>{{item.pair.bid == bid ? item.bid_value : item.ask_value}}</b></td>
 					<td>{{item.pair.bid == bid ? item.bid_symbol : item.ask_symbol}}</td>
-					<td>{{item.pair.bid == bid ? item.ask_value : item.bid_value}}</td>
+					<td class="collapsing"><b>{{item.pair.bid == bid ? item.ask_value : item.bid_value}}</b></td>
 					<td>{{item.pair.bid == bid ? item.ask_symbol : item.bid_symbol}}</td>
+					<td class="collapsing"><b>{{(item.pair.bid == bid ? item.ask_value / item.bid_value : item.bid_value / item.ask_value).toPrecision(5)}}</b></td>
+					<td>{{item.pair.bid == bid ? item.ask_symbol : item.bid_symbol}} / {{item.pair.bid == bid ? item.bid_symbol : item.ask_symbol}}</td>
 					<td>{{item.offer_id}}</td>
 					<td>{{item.failed ? "(failed)" : (item.height ? item.height : "(pending)")}}</td>
-					<td>{{item.time ? new Date(item.time * 1000).toLocaleString() : "(pending)"}}</td>
+					<td>{{item.time ? new Date(item.time * 1000).toLocaleString() : (item.failed ? "(failed)" : "(pending)")}}</td>
 				</tr>
 			</tbody>
 		</table>
@@ -299,7 +308,9 @@ app.component('exchange-trade-form', {
 			bid_amount: null,
 			ask_amount: null,
 			confirmed: false,
-			timer: null
+			timer: null,
+			result: null,
+			error: null
 		}
 	},
 	methods: {
@@ -329,16 +340,16 @@ app.component('exchange-trade-form', {
 					if(response.ok) {
 						response.json().then(data => {
 							if(data.length) {
-								alert("TX IDs: " + JSON.stringify(data));
+								this.result = data;
 								this.$emit('trade-executed', data);
 								this.update();
 							} else {
-								alert("Trade failed! (Most likely no offers available or bid amount too low)")
+								this.error = "Most likely no offers available or bid amount too low.";
 							}
 						});
 					} else {
 						response.text().then(data => {
-							alert("Failed with: " + data)
+							this.error = data;
 						});
 					}
 				});
@@ -363,48 +374,230 @@ app.component('exchange-trade-form', {
 				.then(response => {
 					if(response.ok) {
 						response.json().then(data => {
-							this.ask_amount = (this.bid_amount * data.price).toPrecision(6);
+							this.ask_amount = (this.bid_amount * data.price).toPrecision(5);
 						});
 					} else {
 						this.ask_amount = "???";
 					}
 				});
+		},
+		result(value) {
+			if(value) {
+				this.error = null;
+			}
+		},
+		error(value) {
+			if(value) {
+				this.result = null;
+			}
 		}
 	},
 	template: `
 		<div class="ui segment">
-		<form class="ui form" id="form">
-			<div class="two fields">
-				<div class="field">
-					<label>Bid Amount</label>
-					<div class="ui right labeled input">
-						<input type="text" v-model.number.lazy="bid_amount" placeholder="1.23" style="text-align: right"/>
-						<div class="ui basic label">
-							{{bid_symbol}}
+			<form class="ui form" id="form">
+				<div class="two fields">
+					<div class="field">
+						<label>Bid Amount</label>
+						<div class="ui right labeled input">
+							<input type="text" v-model.number.lazy="bid_amount" placeholder="1.23" style="text-align: right"/>
+							<div class="ui basic label">
+								{{bid_symbol}}
+							</div>
+						</div>
+					</div>
+					<div class="field">
+						<label>Receive (estimated)</label>
+						<div class="ui right labeled input field">
+							<input type="text" v-model="ask_amount" style="text-align: right" disabled/>
+							<div class="ui basic label">
+								{{ask_symbol}}
+							</div>
 						</div>
 					</div>
 				</div>
-				<div class="field">
-					<label>Receive (estimated)</label>
-					<div class="ui right labeled input field">
-						<input type="text" v-model="ask_amount" style="text-align: right" disabled/>
-						<div class="ui basic label">
-							{{ask_symbol}}
-						</div>
+				<div class="inline field">
+					<div class="ui checkbox">
+						<input type="checkbox" v-model="confirmed">
+						<label>Confirm</label>
 					</div>
 				</div>
+				<div @click="submit" class="ui submit primary button" :class="{disabled: !confirmed}" id="submit">Trade</div>
+			</form>
+			<div class="ui bottom right attached large label">
+				Balance: {{balance}} {{bid_symbol}}
 			</div>
-			<div class="inline field">
-				<div class="ui checkbox">
-					<input type="checkbox" v-model="confirmed">
-					<label>Confirm</label>
-				</div>
-			</div>
-			<div @click="submit" class="ui submit primary button" :class="{disabled: !confirmed}" id="submit">Trade</div>
-		</form>
-		<div class="ui bottom right attached large label">
-			Balance: {{balance}} {{bid_symbol}}
 		</div>
+		<div class="ui message" :class="{hidden: !result}">
+			<template v-for="item in result" :key="item.id">
+				Traded {{item.order.bid_value}} [{{item.order.bid_symbol}}] for {{item.order.ask_value}} [{{item.order.ask_symbol}}]
+				<template v-if="item.failed">({{item.message}})</template>
+				<br/>
+			</template>
+		</div>
+		<div class="ui negative message" :class="{hidden: !error}">
+			Failed with: <b>{{error}}</b>
+		</div>
+		`
+})
+
+app.component('exchange-offer-form', {
+	props: {
+		server: String,
+		wallet: Number,
+		bid_symbol: String,
+		ask_symbol: String,
+		bid_currency: String,
+		ask_currency: String,
+		flip: Boolean
+	},
+	emits: [
+		"offer-created"
+	],
+	data() {
+		return {
+			balance: null,
+			bid_amount: null,
+			ask_amount: null,
+			price: null,
+			confirmed: false,
+			timer: null,
+			result: null,
+			error: null
+		}
+	},
+	methods: {
+		update() {
+			fetch('/wapi/wallet/balance?index=' + this.wallet + '&currency=' + this.bid_currency)
+				.then(response => response.json())
+				.then(data => {
+					if(data.balances.length) {
+						this.balance = data.balances[0].spendable;
+					} else {
+						this.balance = 0;
+					}
+				});
+		},
+		submit() {
+			this.confirmed = false;
+			const req = {};
+			req.index = this.wallet;
+			const pair = {};
+			pair.bid = this.bid_currency;
+			pair.ask = this.ask_currency;
+			req.pair = pair;
+			req.bid = this.bid_amount;
+			req.ask = this.ask_amount;
+			fetch('/wapi/exchange/offer', {body: JSON.stringify(req), method: "post"})
+				.then(response => {
+					if(response.ok) {
+						response.json().then(data => {
+							fetch('/wapi/exchange/place?id=' + data.id)
+								.then(response => {
+										if(response.ok) {
+											this.result = data;
+											this.update();
+											this.$emit('offer-created', data);
+										} else {
+											response.text().then(data => {
+												this.error = data;
+											});
+										}
+									});
+						});
+					} else {
+						response.text().then(data => {
+							this.error = data;
+						});
+					}
+				});
+		}
+	},
+	created() {
+		this.update();
+		this.timer = setInterval(() => { this.update(); }, 10000);
+	},
+	mounted() {
+		$('.ui.checkbox').checkbox();
+	},
+	unmounted() {
+		clearInterval(this.timer);
+	},
+	watch: {
+		wallet() {
+			this.update();
+		},
+		price(value) {
+			if(this.bid_amount && value) {
+				this.ask_amount = parseFloat((this.flip ? this.bid_amount / value : this.bid_amount * value).toPrecision(5));
+			}
+		},
+		bid_amount(value) {
+			if(this.price) {
+				this.ask_amount = parseFloat((this.flip ? this.bid_amount / this.price : this.bid_amount * this.price).toPrecision(5));
+			}
+		},
+		result(value) {
+			if(value) {
+				this.error = null;
+			}
+		},
+		error(value) {
+			if(value) {
+				this.result = null;
+			}
+		}
+	},
+	template: `
+		<div class="ui segment">
+			<form class="ui form" id="form">
+				<div class="two fields">
+					<div class="field">
+						<label>Bid Amount</label>
+						<div class="ui right labeled input">
+							<input type="text" v-model.number="bid_amount" placeholder="1.23" style="text-align: right"/>
+							<div class="ui basic label">
+								{{bid_symbol}}
+							</div>
+						</div>
+					</div>
+					<div class="field">
+						<label>Ask Amount</label>
+						<div class="ui right labeled input field">
+							<input type="text" v-model.number="ask_amount" style="text-align: right" disabled/>
+							<div class="ui basic label">
+								{{ask_symbol}}
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="field">
+					<label>Price</label>
+					<div class="ui right labeled input field">
+						<input type="text" v-model.number="price" style="text-align: right"/>
+						<div class="ui basic label">
+							{{flip ? bid_symbol : ask_symbol}} / {{flip ? ask_symbol : bid_symbol}}
+						</div>
+					</div>
+				</div>
+				<div class="inline field">
+					<div class="ui checkbox">
+						<input type="checkbox" v-model="confirmed">
+						<label>Confirm</label>
+					</div>
+				</div>
+				<div @click="submit" class="ui submit primary button" :class="{disabled: !confirmed}" id="submit">Offer</div>
+			</form>
+			<div class="ui bottom right attached large label">
+				Balance: {{balance}} {{bid_symbol}}
+			</div>
+		</div>
+		<div class="ui message" :class="{hidden: !result}">
+			<template v-if="result">
+				[<b>{{result.id}}</b>] Offering <b>{{result.bid_value}}</b> [{{result.bid_symbol}}] for <b>{{result.ask_value}}</b> [{{result.ask_symbol}}]
+			</template>
+		</div>
+		<div class="ui negative message" :class="{hidden: !error}">
+			Failed with: <b>{{error}}</b>
 		</div>
 		`
 })

@@ -133,7 +133,7 @@ app.component('account-balance', {
 			<tr v-for="item in balances" :key="item.contract">
 				<td>{{item.total}}</td>
 				<td>{{item.reserved}}</td>
-				<td>{{item.spendable}}</td>
+				<td><b>{{item.spendable}}</b></td>
 				<td>{{item.symbol}}</td>
 				<td>{{item.is_native ? '' : item.contract}}</td>
 			</tr>
@@ -157,7 +157,7 @@ app.component('balance-table', {
 			</thead>
 			<tbody>
 			<tr v-for="item in balances" :key="item.contract">
-				<td>{{item.value}}</td>
+				<td><b>{{item.value}}</b></td>
 				<td>{{item.symbol}}</td>
 				<td>{{item.is_native ? '' : item.contract}}</td>
 			</tr>
@@ -242,7 +242,7 @@ app.component('account-history', {
 			<tr v-for="item in data">
 				<td>{{item.height}}</td>
 				<td>{{item.type}}</td>
-				<td>{{item.value}}</td>
+				<td><b>{{item.value}}</b></td>
 				<td>{{item.symbol}}</td>
 				<td>{{item.address}}</td>
 				<td>{{new Date(item.time * 1000).toLocaleString()}}</td>
@@ -364,10 +364,15 @@ app.component('account-send-form', {
 			accounts: [],
 			balances: [],
 			amount: null,
+			target: null,
+			address: null,
+			currency: null,
 			confirmed: false,
 			options: {
 				split_output: 1
-			}
+			},
+			result: null,
+			error: null
 		}
 	},
 	methods: {
@@ -383,7 +388,7 @@ app.component('account-send-form', {
 							.then(data => {
 								info.address = data[0];
 								this.accounts.push(info);
-								this.accounts.sort(function(a, b){return a.account - b.account});
+								this.accounts.sort((a, b) => a.account - b.account);
 							});
 					}
 				});
@@ -396,18 +401,18 @@ app.component('account-send-form', {
 			const req = {};
 			req.index = this.index;
 			req.amount = this.amount;
-			req.currency = $('#currency_input').val();
-			req.dst_addr = $('#target').val();
+			req.currency = this.currency;
+			req.dst_addr = this.target;
 			req.options = this.options;
 			fetch('/wapi/wallet/send', {body: JSON.stringify(req), method: "post"})
 				.then(response => {
 					if(response.ok) {
 						response.json().then(data => {
-							alert("Transaction ID: " + data)
+							this.result = data;
 						});
 					} else {
 						response.text().then(data => {
-							alert("Send failed with: " + data)
+							this.error = data;
 						});
 					}
 					this.update();
@@ -416,89 +421,84 @@ app.component('account-send-form', {
 		}
 	},
 	created() {
-		this.update()
+		this.update();
 	},
 	mounted() {
-		$('#address').dropdown({
-			onChange: function(value, text) {
-				if(value) {
-					$('#target').val(value).prop('disabled', true);
-				} else {
-					$('#target').val("").prop('disabled', false);
-				}
-			}
-		});
-		$('#currency').dropdown({
-			onChange: function(value, text) {}
-		});
 		$('.ui.checkbox').checkbox();
 	},
 	watch: {
+		address(value) {
+			if(value) {
+				this.target = value;
+			} else {
+				this.target = null;
+			}
+		},
 		amount(value) {
 			// TODO: validate
 		},
-		confirmed(value) {
+		result(value) {
 			if(value) {
-				$('#submit').removeClass('disabled');
-			} else {
-				$('#submit').addClass('disabled');
+				this.error = null;
+			}
+		},
+		error(value) {
+			if(value) {
+				this.result = null;
 			}
 		}
 	},
 	template: `
 		<account-balance :index="index" ref="balance"></account-balance>
 		<div class="ui raised segment">
-		<form class="ui form" id="form">
-			<div class="field">
-				<label>Destination</label>
-				<div class="ui selection dropdown" id="address">
-					<i class="dropdown icon"></i>
-					<div class="default text">Select</div>
-					<div class="menu">
-						<div class="item" data-value="">Address Input</div>
-						<div v-for="item in accounts" :key="item.account" class="item" :data-value="item.address">
+			<form class="ui form">
+				<div class="field">
+					<label>Destination</label>
+					<select v-model="address">
+						<option value="">Address Input</option>
+						<option v-for="item in accounts" :key="item.account" class="item" :value="item.address">
 							Account #{{item.account}} ([{{item.index}}] {{item.name}}) ({{item.address}})
-						</div>
+						</option>
+					</select>
+				</div>
+				<div class="two fields">
+					<div class="fourteen wide field">
+						<label>Destination Address</label>
+						<input type="text" v-model="target" :disabled="address" placeholder="mmx1..."/>
+					</div>
+					<div class="two wide field">
+						<label>Output Split</label>
+						<input type="text" v-model.number="options.split_output" style="text-align: right"/>
 					</div>
 				</div>
-			</div>
-			<div class="two fields">
-				<div class="fourteen wide field">
-					<label>Destination Address</label>
-					<input type="text" id="target" placeholder="mmx1..."/>
-				</div>
-				<div class="two wide field">
-					<label>Output Split</label>
-					<input type="text" v-model.number="options.split_output" style="text-align: right"/>
-				</div>
-			</div>
-			<div class="two fields">
-				<div class="four wide field">
-					<label>Amount</label>
-					<input type="text" v-model.number="amount" placeholder="1.23" style="text-align: right"/>
-				</div>
-				<div class="twelve wide field">
-					<label>Currency</label>
-					<div class="ui selection dropdown" id="currency">
-						<input type="hidden" id="currency_input">
-						<i class="dropdown icon"></i>
-						<div class="default text">Select</div>
-						<div class="menu">
-							<div v-for="item in balances" :key="item.contract" class="item" :data-value="item.contract">
+				<div class="two fields">
+					<div class="four wide field">
+						<label>Amount</label>
+						<input type="text" v-model.number="amount" placeholder="1.23" style="text-align: right"/>
+					</div>
+					<div class="twelve wide field">
+						<label>Currency</label>
+						<select v-model="currency">
+							<option v-for="item in balances" :key="item.contract" class="item" :value="item.contract">
 								{{item.symbol}} <template v-if="!item.is_native"> - [{{item.contract}}]</template>
-							</div>
-						</div>
+							</option>
+						</select>
 					</div>
 				</div>
-			</div>
-			<div class="inline field">
-				<div class="ui toggle checkbox">
-					<input type="checkbox" class="hidden" v-model="confirmed">
-					<label>Confirm</label>
+				<div class="inline field">
+					<div class="ui toggle checkbox">
+						<input type="checkbox" class="hidden" v-model="confirmed">
+						<label>Confirm</label>
+					</div>
 				</div>
-			</div>
-			<div @click="submit" class="ui submit primary button disabled" id="submit">Send</div>
-		</form>
+				<div @click="submit" class="ui submit primary button" :class="{disabled: !confirmed}">Send</div>
+			</form>
+		</div>
+		<div class="ui large message" :class="{hidden: !result}">
+			Transaction has been sent: <b>{{result}}</b>
+		</div>
+		<div class="ui large negative message" :class="{hidden: !error}">
+			Failed with: <b>{{error}}</b>
 		</div>
 		`
 })
@@ -513,9 +513,12 @@ app.component('account-offer-form', {
 			bid_amount: null,
 			ask_amount: null,
 			ask_symbol: "MMX",
+			bid_currency: null,
 			ask_currency: null,
 			confirmed: false,
-			timer: null
+			timer: null,
+			result: null,
+			error: null
 		}
 	},
 	methods: {
@@ -533,7 +536,7 @@ app.component('account-offer-form', {
 			const req = {};
 			req.index = this.index;
 			const pair = {};
-			pair.bid = $('#bid_currency').val();
+			pair.bid = this.bid_currency;
 			pair.ask = this.ask_currency;
 			req.pair = pair;
 			req.bid = this.bid_amount;
@@ -545,19 +548,20 @@ app.component('account-offer-form', {
 							fetch('/wapi/exchange/place?id=' + data.id)
 								.then(response => {
 										if(response.ok) {
+											this.result = data;
 											this.update();
 											this.$refs.balance.update();
 											this.$refs.offers.update();
 										} else {
 											response.text().then(data => {
-												alert("Failed with: " + data)
+												this.error = data;
 											});
 										}
 									});
 						});
 					} else {
 						response.text().then(data => {
-							alert("Failed with: " + data)
+							this.error = data;
 						});
 					}
 				});
@@ -568,7 +572,6 @@ app.component('account-offer-form', {
 		this.timer = setInterval(() => { this.update(); }, 30000);
 	},
 	mounted() {
-		$('.ui.dropdown').dropdown();
 		$('.ui.checkbox').checkbox();
 	},
 	unmounted() {
@@ -588,69 +591,75 @@ app.component('account-offer-form', {
 						if(response.ok) {
 							response.json()
 								.then(data => {
-									this.ask_symbol = data.symbol
+									this.ask_symbol = data.symbol;
 								});
 						} else {
-							this.ask_symbol = "???"
+							this.ask_symbol = "???";
 						}
 					});
 			} else {
-				this.ask_symbol = "MMX"
+				this.ask_symbol = "MMX";
 			}
 		},
-		confirmed(value) {
+		result(value) {
 			if(value) {
-				$('#submit').removeClass('disabled');
-			} else {
-				$('#submit').addClass('disabled');
+				this.error = null;
+			}
+		},
+		error(value) {
+			if(value) {
+				this.result = null;
 			}
 		}
 	},
 	template: `
 		<account-balance :index="index" ref="balance"></account-balance>
 		<div class="ui raised segment">
-		<form class="ui form" id="form">
-			<div class="two fields">
-				<div class="four wide field">
-					<label>Bid Amount</label>
-					<input type="text" v-model.number="bid_amount" placeholder="1.23" style="text-align: right"/>
-				</div>
-				<div class="twelve wide field">
-					<label>Bid Currency</label>
-					<div class="ui selection dropdown" id="bid_select">
-						<input type="hidden" id="bid_currency">
-						<i class="dropdown icon"></i>
-						<div class="default text">Select</div>
-						<div class="menu">
-							<div v-for="item in balances" :key="item.contract" class="item" :data-value="item.contract">
+			<form class="ui form" id="form">
+				<div class="two fields">
+					<div class="four wide field">
+						<label>Bid Amount</label>
+						<input type="text" v-model.number="bid_amount" placeholder="1.23" style="text-align: right"/>
+					</div>
+					<div class="twelve wide field">
+						<label>Bid Currency</label>
+						<select v-model="bid_currency">
+							<option v-for="item in balances" :key="item.contract" class="item" :value="item.contract">
 								{{item.symbol}} <template v-if="!item.is_native"> - [{{item.contract}}]</template>
-							</div>
-						</div>
+							</option>
+						</select>
 					</div>
 				</div>
-			</div>
-			<div class="two fields">
-				<div class="four wide field">
-					<label>Ask Amount</label>
-					<input type="text" v-model.number="ask_amount" placeholder="1.23" style="text-align: right"/>
+				<div class="two fields">
+					<div class="four wide field">
+						<label>Ask Amount</label>
+						<input type="text" v-model.number="ask_amount" placeholder="1.23" style="text-align: right"/>
+					</div>
+					<div class="two wide field">
+						<label>Ask Symbol</label>
+						<input type="text" v-model="ask_symbol" disabled/>
+					</div>
+					<div class="ten wide field">
+						<label>Ask Currency Contract</label>
+						<input type="text" v-model="ask_currency" placeholder="mmx1..."/>
+					</div>
 				</div>
-				<div class="two wide field">
-					<label>Ask Symbol</label>
-					<input type="text" v-model="ask_symbol" disabled/>
+				<div class="inline field">
+					<div class="ui toggle checkbox">
+						<input type="checkbox" class="hidden" v-model="confirmed">
+						<label>Confirm</label>
+					</div>
 				</div>
-				<div class="ten wide field">
-					<label>Ask Currency Contract</label>
-					<input type="text" v-model="ask_currency" placeholder="mmx1..."/>
-				</div>
-			</div>
-			<div class="inline field">
-				<div class="ui toggle checkbox">
-					<input type="checkbox" class="hidden" v-model="confirmed">
-					<label>Confirm</label>
-				</div>
-			</div>
-			<div @click="submit" class="ui submit primary button disabled" id="submit">Offer</div>
-		</form>
+				<div @click="submit" class="ui submit primary button" :class="{disabled: !confirmed}">Offer</div>
+			</form>
+		</div>
+		<div class="ui large message" :class="{hidden: !result}">
+			<template v-if="result">
+				[<b>{{result.id}}</b>] Offering <b>{{result.bid_value}}</b> [{{result.bid_symbol}}] for <b>{{result.ask_value}}</b> [{{result.ask_symbol}}]
+			</template>
+		</div>
+		<div class="ui large negative message" :class="{hidden: !error}">
+			Failed with: <b>{{error}}</b>
 		</div>
 		<account-offers @offer-cancel="update_balance" :index="index" ref="offers"></account-offers>
 		`
@@ -658,7 +667,9 @@ app.component('account-offer-form', {
 
 app.component('account-offers', {
 	props: {
-		index: Number
+		index: Number,
+		bid: String,
+		ask: String
 	},
 	emits: [
 		"offer-cancel"
@@ -671,7 +682,7 @@ app.component('account-offers', {
 	},
 	methods: {
 		update() {
-			fetch('/wapi/exchange/offers?wallet=' + this.index)
+			fetch('/wapi/exchange/offers?wallet=' + this.index + (this.bid ? '&bid=' + this.bid : '') + (this.ask ? '&ask=' + this.ask : ''))
 				.then(response => response.json())
 				.then(data => this.data = data);
 		},
@@ -681,6 +692,11 @@ app.component('account-offers', {
 					this.update();
 					this.$emit('offer-cancel', id);
 				});
+		}
+	},
+	watch: {
+		index(value) {
+			this.update();
 		}
 	},
 	created() {
@@ -695,10 +711,14 @@ app.component('account-offers', {
 			<thead>
 			<tr>
 				<th>ID</th>
-				<th>Bid Amount</th>
-				<th>Bid Symbol</th>
-				<th>Ask Amount</th>
-				<th>Ask Symbol</th>
+				<th>Bid</th>
+				<th></th>
+				<th>Ask</th>
+				<th></th>
+				<th>Price</th>
+				<th></th>
+				<th>Price</th>
+				<th></th>
 				<th>Status</th>
 				<th>Actions</th>
 			</tr>
@@ -706,10 +726,14 @@ app.component('account-offers', {
 			<tbody>
 			<tr v-for="item in data">
 				<td>{{item.id}}</td>
-				<td>{{item.bid_value}}</td>
+				<td class="collapsing"><b>{{item.bid_value}}</b></td>
 				<td>{{item.bid_symbol}}</td>
-				<td>{{item.ask_value}}</td>
+				<td class="collapsing"><b>{{item.ask_value}}</b></td>
 				<td>{{item.ask_symbol}}</td>
+				<td class="collapsing"><b>{{(item.ask_value / item.bid_value).toPrecision(5)}}</b></td>
+				<td>{{item.ask_symbol}} / {{item.bid_symbol}}</td>
+				<td class="collapsing"><b>{{(item.bid_value / item.ask_value).toPrecision(5)}}</b></td>
+				<td>{{item.bid_symbol}} / {{item.ask_symbol}}</td>
 				<td>{{(100 * item.bid_sold / item.bid).toPrecision(3)}} %</td>
 				<td>
 					<div class="ui tiny compact button" @click="cancel(item.id)">Cancel</div>
