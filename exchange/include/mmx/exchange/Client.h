@@ -21,6 +21,7 @@
 
 #include <vnx/ThreadPool.h>
 #include <vnx/addons/HttpInterface.h>
+#include <vnx/rocksdb/table.h>
 
 
 namespace mmx {
@@ -62,9 +63,11 @@ protected:
 
 	void cancel_all() override;
 
-	std::shared_ptr<const OfferBundle> make_offer(const uint32_t& wallet, const trade_pair_t& pair, const uint64_t& bid, const uint64_t& ask) const override;
+	std::shared_ptr<const OfferBundle>
+	make_offer(const uint32_t& wallet, const trade_pair_t& pair, const uint64_t& bid, const uint64_t& ask, const uint32_t& num_chunks) const override;
 
-	std::vector<trade_order_t> make_trade(const uint32_t& wallet, const trade_pair_t& pair, const uint64_t& bid, const vnx::optional<uint64_t>& ask) const override;
+	std::vector<trade_order_t>
+	make_trade(const uint32_t& wallet, const trade_pair_t& pair, const uint64_t& bid, const vnx::optional<uint64_t>& ask) const override;
 
 	void place(std::shared_ptr<const OfferBundle> offer) override;
 
@@ -82,6 +85,8 @@ protected:
 
 	void get_price_async(const std::string& server, const addr_t& want, const amount_t& have, const vnx::request_id_t& request_id) const override;
 
+	void get_min_trade_async(const std::string& server, const trade_pair_t& pair, const vnx::request_id_t& request_id) const override;
+
 	void http_request_async(std::shared_ptr<const vnx::addons::HttpRequest> request, const std::string& sub_path,
 							const vnx::request_id_t& request_id) const override;
 
@@ -95,7 +100,11 @@ private:
 
 	std::shared_ptr<OfferBundle> find_offer(const uint64_t& id) const;
 
+	bool try_place(std::shared_ptr<OfferBundle> offer);
+
 	void send_offer(uint64_t server, std::shared_ptr<const OfferBundle> offer);
+
+	void send_offer(std::shared_ptr<const OfferBundle> offer);
 
 	void send_to(uint64_t client, std::shared_ptr<const vnx::Value> msg, bool reliable = true);
 
@@ -106,7 +115,7 @@ private:
 
 	void connect();
 
-	void save_offers() const;
+	void post_offers();
 
 	void add_peer(const std::string& address, const int sock);
 
@@ -137,7 +146,6 @@ private:
 	std::shared_ptr<peer_t> get_server(const std::string& name) const;
 
 private:
-	bool is_init = true;
 	std::shared_ptr<NodeClient> node;
 	std::shared_ptr<WalletClient> wallet;
 
@@ -147,11 +155,13 @@ private:
 
 	std::unordered_map<txio_key_t, open_order_t> order_map;
 	std::map<uint64_t, std::shared_ptr<OfferBundle>> offer_map;
+	vnx::rocksdb::table<uint64_t, std::shared_ptr<OfferBundle>> offer_table;
 
 	mutable std::multimap<uint32_t, std::shared_ptr<const LocalTrade>> trade_history;
 
 	mutable std::unordered_set<hash_t> pending_approvals;
 	mutable std::unordered_map<hash_t, std::shared_ptr<LocalTrade>> pending_trades;
+	mutable std::unordered_map<uint64_t, std::shared_ptr<OfferBundle>> pending_offers;
 	mutable std::unordered_map<uint32_t, std::function<void(std::shared_ptr<const vnx::Value>)>> return_map;
 
 	vnx::ThreadPool* threads = nullptr;

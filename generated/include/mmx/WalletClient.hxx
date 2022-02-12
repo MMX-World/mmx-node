@@ -67,9 +67,17 @@ public:
 	
 	::mmx::hash_t deploy(const uint32_t& index = 0, std::shared_ptr<const ::mmx::Contract> contract = nullptr, const ::mmx::spend_options_t& options = ::mmx::spend_options_t());
 	
+	vnx::optional<::mmx::hash_t> split(const uint32_t& index = 0, const uint64_t& max_amount = 0, const ::mmx::addr_t& currency = ::mmx::addr_t(), const ::mmx::spend_options_t& options = ::mmx::spend_options_t());
+	
+	std::shared_ptr<const ::mmx::Transaction> complete(const uint32_t& index = 0, std::shared_ptr<const ::mmx::Transaction> tx = nullptr, const ::mmx::spend_options_t& options = ::mmx::spend_options_t());
+	
 	std::shared_ptr<const ::mmx::Transaction> sign_off(const uint32_t& index = 0, std::shared_ptr<const ::mmx::Transaction> tx = nullptr, const vnx::bool_t& cover_fee = 0, const std::vector<std::pair<::mmx::txio_key_t, ::mmx::utxo_t>>& utxo_list = {});
 	
 	std::shared_ptr<const ::mmx::Solution> sign_msg(const uint32_t& index = 0, const ::mmx::addr_t& address = ::mmx::addr_t(), const ::mmx::hash_t& msg = ::mmx::hash_t());
+	
+	void send_off(const uint32_t& index = 0, std::shared_ptr<const ::mmx::Transaction> tx = nullptr);
+	
+	void send_off_async(const uint32_t& index = 0, std::shared_ptr<const ::mmx::Transaction> tx = nullptr);
 	
 	void mark_spent(const uint32_t& index = 0, const std::vector<::mmx::txio_key_t>& keys = {});
 	
@@ -116,6 +124,14 @@ public:
 	void add_account(const uint32_t& index = 0, const ::mmx::account_t& config = ::mmx::account_t());
 	
 	void add_account_async(const uint32_t& index = 0, const ::mmx::account_t& config = ::mmx::account_t());
+	
+	void create_account(const ::mmx::account_t& config = ::mmx::account_t());
+	
+	void create_account_async(const ::mmx::account_t& config = ::mmx::account_t());
+	
+	void create_wallet(const ::mmx::account_t& config = ::mmx::account_t());
+	
+	void create_wallet_async(const ::mmx::account_t& config = ::mmx::account_t());
 	
 	::mmx::hash_t get_master_seed(const uint32_t& index = 0);
 	

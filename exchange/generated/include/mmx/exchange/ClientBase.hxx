@@ -37,7 +37,9 @@ public:
 	std::string node_server = "Node";
 	std::string wallet_server = "Wallet";
 	std::map<std::string, std::string> server_map;
-	std::string storage_path;
+	std::string storage_path = "exchange/";
+	int32_t post_interval = 900;
+	uint32_t min_confirm = 2;
 	uint32_t max_trade_history = 10000;
 	
 	typedef ::vnx::addons::MsgServer Super;
@@ -88,13 +90,15 @@ protected:
 	void get_trade_history_async_return(const vnx::request_id_t& _request_id, const std::vector<::mmx::exchange::trade_entry_t>& _ret_0) const;
 	virtual void get_price_async(const std::string& server, const ::mmx::addr_t& want, const ::mmx::exchange::amount_t& have, const vnx::request_id_t& _request_id) const = 0;
 	void get_price_async_return(const vnx::request_id_t& _request_id, const ::mmx::ulong_fraction_t& _ret_0) const;
+	virtual void get_min_trade_async(const std::string& server, const ::mmx::exchange::trade_pair_t& pair, const vnx::request_id_t& _request_id) const = 0;
+	void get_min_trade_async_return(const vnx::request_id_t& _request_id, const ::mmx::ulong_fraction_t& _ret_0) const;
 	virtual ::mmx::exchange::open_order_t get_order(const ::mmx::txio_key_t& key) const = 0;
 	virtual std::shared_ptr<const ::mmx::exchange::OfferBundle> get_offer(const uint64_t& id) const = 0;
 	virtual std::vector<std::shared_ptr<const ::mmx::exchange::OfferBundle>> get_all_offers() const = 0;
 	virtual std::vector<std::shared_ptr<const ::mmx::exchange::LocalTrade>> get_local_history(const vnx::optional<::mmx::exchange::trade_pair_t>& pair, const int32_t& limit) const = 0;
 	virtual void cancel_offer(const uint64_t& id) = 0;
 	virtual void cancel_all() = 0;
-	virtual std::shared_ptr<const ::mmx::exchange::OfferBundle> make_offer(const uint32_t& wallet, const ::mmx::exchange::trade_pair_t& pair, const uint64_t& bid, const uint64_t& ask) const = 0;
+	virtual std::shared_ptr<const ::mmx::exchange::OfferBundle> make_offer(const uint32_t& wallet, const ::mmx::exchange::trade_pair_t& pair, const uint64_t& bid, const uint64_t& ask, const uint32_t& num_chunks) const = 0;
 	virtual std::vector<::mmx::exchange::trade_order_t> make_trade(const uint32_t& wallet, const ::mmx::exchange::trade_pair_t& pair, const uint64_t& bid, const vnx::optional<uint64_t>& ask) const = 0;
 	virtual void place(std::shared_ptr<const ::mmx::exchange::OfferBundle> offer) = 0;
 	virtual std::shared_ptr<const ::mmx::Transaction> approve(std::shared_ptr<const ::mmx::Transaction> tx) const = 0;
@@ -111,7 +115,7 @@ protected:
 
 template<typename T>
 void ClientBase::accept_generic(T& _visitor) const {
-	_visitor.template type_begin<ClientBase>(18);
+	_visitor.template type_begin<ClientBase>(20);
 	_visitor.type_field("port", 0); _visitor.accept(port);
 	_visitor.type_field("host", 1); _visitor.accept(host);
 	_visitor.type_field("max_connections", 2); _visitor.accept(max_connections);
@@ -129,8 +133,10 @@ void ClientBase::accept_generic(T& _visitor) const {
 	_visitor.type_field("wallet_server", 14); _visitor.accept(wallet_server);
 	_visitor.type_field("server_map", 15); _visitor.accept(server_map);
 	_visitor.type_field("storage_path", 16); _visitor.accept(storage_path);
-	_visitor.type_field("max_trade_history", 17); _visitor.accept(max_trade_history);
-	_visitor.template type_end<ClientBase>(18);
+	_visitor.type_field("post_interval", 17); _visitor.accept(post_interval);
+	_visitor.type_field("min_confirm", 18); _visitor.accept(min_confirm);
+	_visitor.type_field("max_trade_history", 19); _visitor.accept(max_trade_history);
+	_visitor.template type_end<ClientBase>(20);
 }
 
 

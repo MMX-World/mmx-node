@@ -7,6 +7,7 @@ add_library(mmx_exchange SHARED
 	${GENERATED_SOURCE_FILES}
 	src/Server.cpp
 	src/Client.cpp
+	src/LocalTrade.cpp
 	src/limit_order_t.cpp
 	src/trade_order_t.cpp
 )
@@ -26,6 +27,6 @@ if(MSVC)
 
 endif()
 
-target_link_libraries(mmx_exchange mmx_iface $<TARGET_OBJECTS:uint256_t>)
+target_link_libraries(mmx_exchange mmx_iface vnx_rocksdb $<TARGET_OBJECTS:uint256_t>)
 
 target_link_libraries(mmx_exch_server mmx_exchange)

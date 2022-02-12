@@ -38,13 +38,20 @@ protected:
 	hash_t mint(const uint32_t& index, const uint64_t& amount, const addr_t& dst_addr,
 				const addr_t& currency, const spend_options_t& options) const override;
 
+	vnx::optional<hash_t> split(const uint32_t& index, const uint64_t& max_amount, const addr_t& currency, const spend_options_t& options) const override;
+
 	hash_t deploy(const uint32_t& index, std::shared_ptr<const Contract> contract, const spend_options_t& options) const override;
+
+	std::shared_ptr<const Transaction>
+	complete(const uint32_t& index, std::shared_ptr<const Transaction> tx, const spend_options_t& options) const;
 
 	std::shared_ptr<const Transaction>
 	sign_off(	const uint32_t& index, std::shared_ptr<const Transaction> tx,
 				const vnx::bool_t& cover_fee, const std::vector<std::pair<txio_key_t, utxo_t>>& utxo_list) const override;
 
 	std::shared_ptr<const Solution> sign_msg(const uint32_t& index, const addr_t& address, const hash_t& msg) const override;
+
+	void send_off(const uint32_t& index, std::shared_ptr<const Transaction> tx) const override;
 
 	void mark_spent(const uint32_t& index, const std::vector<txio_key_t>& keys) override;
 
@@ -86,6 +93,10 @@ protected:
 	std::map<uint32_t, account_t> get_all_accounts() const override;
 
 	void add_account(const uint32_t& index, const account_t& config) override;
+
+	void create_account(const account_t& config) override;
+
+	void create_wallet(const account_t& config) override;
 
 	hash_t get_master_seed(const uint32_t& index) const override;
 

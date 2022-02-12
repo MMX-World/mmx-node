@@ -5,6 +5,9 @@ var app = Vue.createApp({
 const Wallet = {
 	template: '<wallet-summary></wallet-summary>'
 }
+const WalletCreate = {
+	template: '<create-wallet></create-wallet>'
+}
 const Account = {
 	props: {
 		index: Number
@@ -37,6 +40,7 @@ const AccountContracts = {
 		index: Number
 	},
 	template: `
+		<create-contract-menu :index="index"></create-contract-menu>
 		<account-contracts :index="index"></account-contracts>
 	`
 }
@@ -48,6 +52,15 @@ const AccountAddresses = {
 		<account-addresses :index="index" :limit="1000"></account-addresses>
 	`
 }
+const AccountCoins = {
+	props: {
+		index: Number,
+		currency: String
+	},
+	template: `
+		<account-coins :index="index" :currency="currency" :limit="1000"></account-coins>
+	`
+}
 const AccountSend = {
 	props: {
 		index: Number
@@ -56,12 +69,44 @@ const AccountSend = {
 		<account-send-form :index="index"></account-send-form>
 	`
 }
+const AccountSplit = {
+	props: {
+		index: Number
+	},
+	template: `
+		<account-split-form :index="index"></account-split-form>
+	`
+}
 const AccountOffer = {
 	props: {
 		index: Number
 	},
 	template: `
 		<account-offer-form :index="index"></account-offer-form>
+	`
+}
+const AccountDetails = {
+	props: {
+		index: Number
+	},
+	template: `
+		<account-details :index="index"></account-details>
+	`
+}
+const AccountOptions = {
+	props: {
+		index: Number
+	},
+	template: `
+		<create-account :index="index"></create-account>
+	`
+}
+const AccountCreateStaking = {
+	props: {
+		index: Number
+	},
+	template: `
+		<create-staking-contract :index="index"></create-staking-contract>
 	`
 }
 
@@ -113,18 +158,18 @@ const ExchangeMarket = {
 				<exchange-trade-form @trade-executed="update"
 					:wallet="wallet" :server="server"
 					:bid_symbol="ask_symbol" :ask_symbol="bid_symbol"
-					:bid_currency="ask" :ask_currency="bid">
+					:bid_currency="ask" :ask_currency="bid" :action="'Buy ' + bid_symbol">
 				</exchange-trade-form>
 			</div>
 			<div class="column">
 				<exchange-trade-form @trade-executed="update"
 					:wallet="wallet" :server="server"
 					:bid_symbol="bid_symbol" :ask_symbol="ask_symbol"
-					:bid_currency="bid" :ask_currency="ask">
+					:bid_currency="bid" :ask_currency="ask" :action="'Sell ' + bid_symbol">
 				</exchange-trade-form>
 			</div>
 		</div>
-		<exchange-orders ref="orders" :server="server" :bid="bid" :ask="ask" :limit="100"></exchange-orders>
+		<exchange-orders ref="orders" :server="server" :bid="bid" :ask="ask" :flip="false" :limit="100"></exchange-orders>
 		`
 }
 
@@ -189,7 +234,7 @@ const ExchangeOffers = {
 				</exchange-offer-form>
 			</div>
 		</div>
-		<exchange-orders ref="orders" :server="server" :bid="bid" :ask="ask" :limit="5"></exchange-orders>
+		<exchange-orders ref="orders" :server="server" :bid="bid" :ask="ask" :flip="true" :limit="5"></exchange-orders>
 		<account-offers ref="offers" @offer-cancel="update_cancel" :index="wallet" :bid="bid" :ask="ask"></account-offers>
 		`
 }
@@ -199,6 +244,7 @@ const Settings = { template: '<h1>Settings</h1>TODO' }
 const routes = [
 	{ path: '/', redirect: "/wallet" },
 	{ path: '/wallet', component: Wallet, meta: { is_wallet: true } },
+	{ path: '/wallet/create', component: WalletCreate, meta: { is_wallet: true } },
 	{ path: '/wallet/account/:index',
 		component: Account,
 		meta: { is_wallet: true },
@@ -209,7 +255,12 @@ const routes = [
 			{ path: 'contracts', component: AccountContracts, meta: { page: 'contracts' } },
 			{ path: 'addresses', component: AccountAddresses, meta: { page: 'addresses' } },
 			{ path: 'send', component: AccountSend, meta: { page: 'send' } },
+			{ path: 'split', component: AccountSplit, meta: { page: 'split' } },
 			{ path: 'offer', component: AccountOffer, meta: { page: 'offer' } },
+			{ path: 'details', component: AccountDetails, meta: { page: 'details' } },
+			{ path: 'options', component: AccountOptions, meta: { page: 'options' } },
+			{ path: 'create/staking', component: AccountCreateStaking },
+			{ path: 'coins/:currency', component: AccountCoins, props: route => ({currency: route.params.currency}) },
 		]
 	},
 	{ path: '/exchange',

@@ -15,7 +15,11 @@ module Client extends vnx.addons.MsgServer implements vnx.addons.HttpComponent {
 	
 	map<string, string> server_map;			// [name => address]
 	
-	string storage_path;
+	string storage_path = "exchange/";
+	
+	int post_interval = 900;				// [sec]
+	
+	uint min_confirm = 2;
 	
 	uint max_trade_history = 10000;
 	
@@ -35,6 +39,8 @@ module Client extends vnx.addons.MsgServer implements vnx.addons.HttpComponent {
 	
 	ulong_fraction_t get_price(string server, addr_t want, amount_t have) const async;
 	
+	ulong_fraction_t get_min_trade(string server, trade_pair_t pair) const async;
+	
 	
 	open_order_t get_order(txio_key_t key) const;
 	
@@ -48,7 +54,7 @@ module Client extends vnx.addons.MsgServer implements vnx.addons.HttpComponent {
 	
 	void cancel_all();
 	
-	OfferBundle* make_offer(uint wallet, trade_pair_t pair, ulong bid, ulong ask) const;
+	OfferBundle* make_offer(uint wallet, trade_pair_t pair, ulong bid, ulong ask, uint num_chunks = 1) const;
 	
 	vector<trade_order_t> make_trade(uint wallet, trade_pair_t pair, ulong bid, optional<ulong> ask) const;
 	

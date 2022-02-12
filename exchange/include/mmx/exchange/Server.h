@@ -18,6 +18,7 @@
 #include <mmx/utils.h>
 
 #include <vnx/GenericAsyncClient.h>
+#include <vnx/rocksdb/multi_table.h>
 
 
 namespace mmx {
@@ -38,7 +39,6 @@ protected:
 	struct order_book_t {
 		std::multimap<double, order_t> orders;
 		std::unordered_map<txio_key_t, double> key_map;
-		std::list<trade_entry_t> history;
 	};
 
 	struct trade_job_t {
@@ -74,6 +74,8 @@ protected:
 	std::vector<trade_entry_t> get_history(const trade_pair_t& pair, const int32_t& limit) const override;
 
 	ulong_fraction_t get_price(const addr_t& want, const amount_t& have) const override;
+
+	ulong_fraction_t get_min_trade(const trade_pair_t& pair) const override;
 
 	void handle(std::shared_ptr<const Block> block) override;
 
@@ -121,11 +123,14 @@ private:
 	std::shared_ptr<vnx::GenericAsyncClient> server;
 	std::shared_ptr<const ChainParams> params;
 
-	mutable std::unordered_map<addr_t, uint64_t> addr_map;						// [addr => client]
 	mutable std::unordered_map<txio_key_t, utxo_t> utxo_map;
+	mutable std::unordered_map<txio_key_t, uint64_t> owner_map;					// [addr => client]
+
 	std::unordered_map<txio_key_t, hash_t> lock_map;							// [key => txid]
 
 	mutable std::map<trade_pair_t, std::shared_ptr<order_book_t>> trade_map;
+
+	vnx::rocksdb::multi_table<trade_pair_t, trade_entry_t, uint64_t> trade_history;
 
 	std::unordered_map<uint64_t, std::shared_ptr<peer_t>> peer_map;
 	std::unordered_map<hash_t, std::shared_ptr<trade_job_t>> pending_trades;

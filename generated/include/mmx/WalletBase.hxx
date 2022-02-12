@@ -32,6 +32,7 @@ public:
 	
 	std::vector<std::string> key_files;
 	std::vector<::mmx::account_t> accounts;
+	std::string config_path;
 	std::string storage_path;
 	std::string node_server = "Node";
 	uint32_t max_accounts = 1000;
@@ -79,8 +80,11 @@ protected:
 	virtual ::mmx::hash_t send_from(const uint32_t& index, const uint64_t& amount, const ::mmx::addr_t& dst_addr, const ::mmx::addr_t& src_addr, const ::mmx::addr_t& currency, const ::mmx::spend_options_t& options) const = 0;
 	virtual ::mmx::hash_t mint(const uint32_t& index, const uint64_t& amount, const ::mmx::addr_t& dst_addr, const ::mmx::addr_t& currency, const ::mmx::spend_options_t& options) const = 0;
 	virtual ::mmx::hash_t deploy(const uint32_t& index, std::shared_ptr<const ::mmx::Contract> contract, const ::mmx::spend_options_t& options) const = 0;
+	virtual vnx::optional<::mmx::hash_t> split(const uint32_t& index, const uint64_t& max_amount, const ::mmx::addr_t& currency, const ::mmx::spend_options_t& options) const = 0;
+	virtual std::shared_ptr<const ::mmx::Transaction> complete(const uint32_t& index, std::shared_ptr<const ::mmx::Transaction> tx, const ::mmx::spend_options_t& options) const = 0;
 	virtual std::shared_ptr<const ::mmx::Transaction> sign_off(const uint32_t& index, std::shared_ptr<const ::mmx::Transaction> tx, const vnx::bool_t& cover_fee, const std::vector<std::pair<::mmx::txio_key_t, ::mmx::utxo_t>>& utxo_list) const = 0;
 	virtual std::shared_ptr<const ::mmx::Solution> sign_msg(const uint32_t& index, const ::mmx::addr_t& address, const ::mmx::hash_t& msg) const = 0;
+	virtual void send_off(const uint32_t& index, std::shared_ptr<const ::mmx::Transaction> tx) const = 0;
 	virtual void mark_spent(const uint32_t& index, const std::vector<::mmx::txio_key_t>& keys) = 0;
 	virtual void reserve(const uint32_t& index, const std::vector<::mmx::txio_key_t>& keys) = 0;
 	virtual void release(const uint32_t& index, const std::vector<::mmx::txio_key_t>& keys) = 0;
@@ -99,6 +103,8 @@ protected:
 	virtual ::mmx::account_t get_account(const uint32_t& index) const = 0;
 	virtual std::map<uint32_t, ::mmx::account_t> get_all_accounts() const = 0;
 	virtual void add_account(const uint32_t& index, const ::mmx::account_t& config) = 0;
+	virtual void create_account(const ::mmx::account_t& config) = 0;
+	virtual void create_wallet(const ::mmx::account_t& config) = 0;
 	virtual ::mmx::hash_t get_master_seed(const uint32_t& index) const = 0;
 	virtual std::shared_ptr<const ::mmx::FarmerKeys> get_farmer_keys(const uint32_t& index) const = 0;
 	virtual std::vector<std::shared_ptr<const ::mmx::FarmerKeys>> get_all_farmer_keys() const = 0;
@@ -114,17 +120,18 @@ protected:
 
 template<typename T>
 void WalletBase::accept_generic(T& _visitor) const {
-	_visitor.template type_begin<WalletBase>(9);
+	_visitor.template type_begin<WalletBase>(10);
 	_visitor.type_field("key_files", 0); _visitor.accept(key_files);
 	_visitor.type_field("accounts", 1); _visitor.accept(accounts);
-	_visitor.type_field("storage_path", 2); _visitor.accept(storage_path);
-	_visitor.type_field("node_server", 3); _visitor.accept(node_server);
-	_visitor.type_field("max_accounts", 4); _visitor.accept(max_accounts);
-	_visitor.type_field("max_key_files", 5); _visitor.accept(max_key_files);
-	_visitor.type_field("num_addresses", 6); _visitor.accept(num_addresses);
-	_visitor.type_field("utxo_timeout_ms", 7); _visitor.accept(utxo_timeout_ms);
-	_visitor.type_field("enable_bls", 8); _visitor.accept(enable_bls);
-	_visitor.template type_end<WalletBase>(9);
+	_visitor.type_field("config_path", 2); _visitor.accept(config_path);
+	_visitor.type_field("storage_path", 3); _visitor.accept(storage_path);
+	_visitor.type_field("node_server", 4); _visitor.accept(node_server);
+	_visitor.type_field("max_accounts", 5); _visitor.accept(max_accounts);
+	_visitor.type_field("max_key_files", 6); _visitor.accept(max_key_files);
+	_visitor.type_field("num_addresses", 7); _visitor.accept(num_addresses);
+	_visitor.type_field("utxo_timeout_ms", 8); _visitor.accept(utxo_timeout_ms);
+	_visitor.type_field("enable_bls", 9); _visitor.accept(enable_bls);
+	_visitor.template type_end<WalletBase>(10);
 }
 
 

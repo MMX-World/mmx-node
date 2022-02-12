@@ -351,11 +351,16 @@ vnx::optional<tx_info_t> Node::get_tx_info(const hash_t& id) const
 		}
 		for(size_t i = 0; i < tx->outputs.size() + tx->exec_outputs.size(); ++i) {
 			txo_info_t entry;
-			if(auto txo = get_txo_info(txio_key_t::create_ex(id, i))) {
+			entry.key = txio_key_t::create_ex(id, i);
+			if(auto txo = get_txo_info(entry.key)) {
 				entry = *txo;
-				info.output_amounts[txo->output.contract] += txo->output.amount;
+			} else if(i < tx->outputs.size()) {
+				entry.output.tx_out_t::operator=(tx->outputs[i]);
+			} else {
+				entry.output.tx_out_t::operator=(tx->exec_outputs[i - tx->outputs.size()]);
 			}
 			info.outputs.push_back(entry);
+			info.output_amounts[entry.output.contract] += entry.output.amount;
 			contracts.insert(entry.output.contract);
 		}
 		for(const auto& op : tx->execute) {
@@ -377,10 +382,11 @@ vnx::optional<tx_info_t> Node::get_tx_info(const hash_t& id) const
 
 vnx::optional<txo_info_t> Node::get_txo_info(const txio_key_t& key) const
 {
+	txo_info_t info;
+	info.key = key;
 	{
 		auto iter = utxo_map.find(key);
 		if(iter != utxo_map.end()) {
-			txo_info_t info;
 			info.output = iter->second;
 			return info;
 		}
@@ -388,7 +394,6 @@ vnx::optional<txo_info_t> Node::get_txo_info(const txio_key_t& key) const
 	{
 		stxo_t stxo;
 		if(stxo_index.find(key, stxo)) {
-			txo_info_t info;
 			info.output = stxo;
 			info.spent = stxo.spent;
 			return info;
@@ -397,14 +402,12 @@ vnx::optional<txo_info_t> Node::get_txo_info(const txio_key_t& key) const
 	for(const auto& log : change_log) {
 		auto iter = log->utxo_removed.find(key);
 		if(iter != log->utxo_removed.end()) {
-			txo_info_t info;
 			info.output = iter->second;
 			info.spent = iter->second.spent;
 			return info;
 		}
 	}
 	if(auto tx = get_transaction(key.txid)) {
-		txo_info_t info;
 		info.output = utxo_t::create_ex(tx->get_output(key.index));
 		return info;
 	}
@@ -730,14 +733,17 @@ void Node::add_block(std::shared_ptr<const Block> block)
 
 void Node::add_transaction(std::shared_ptr<const Transaction> tx, const vnx::bool_t& pre_validate)
 {
-	if(tx_pool.size() >= tx_pool_limit) {
-		return;
-	}
 	if(tx_pool.count(tx->id)) {
 		return;
 	}
+	if(tx_pool.size() >= tx_pool_limit) {
+		throw std::logic_error("tx pool at limit");
+	}
 	if(!tx->is_valid()) {
-		return;
+		throw std::logic_error("invalid tx");
+	}
+	if(tx->calc_cost(params) > params->max_block_cost) {
+		throw std::logic_error("tx cost > max_block_cost");
 	}
 	if(pre_validate) {
 		validate(tx);
@@ -862,15 +868,16 @@ void Node::http_request_chunk_async(std::shared_ptr<const vnx::addons::HttpReque
 
 void Node::handle(std::shared_ptr<const Block> block)
 {
+	if(!block->proof) {
+		return;
+	}
 	if(!is_synced) {
 		const auto peak = get_peak();
 		if(peak && block->height > peak->height && block->height - peak->height > 2 * params->commit_delay) {
 			return;
 		}
 	}
-	if(block->proof) {
-		add_block(block);
-	}
+	add_block(block);
 }
 
 void Node::handle(std::shared_ptr<const Transaction> tx)
@@ -1099,7 +1106,7 @@ std::shared_ptr<const BlockHeader> Node::fork_to(std::shared_ptr<fork_t> fork_he
 	// verify and apply
 	for(const auto& fork : fork_line)
 	{
-		const auto& block = fork->block;
+		auto& block = fork->block;
 		if(block->prev != state_hash) {
 			// already verified and applied
 			continue;
@@ -1107,7 +1114,7 @@ std::shared_ptr<const BlockHeader> Node::fork_to(std::shared_ptr<fork_t> fork_he
 		if(!fork->is_verified) {
 			try {
 				if(!light_mode) {
-					validate(block);
+					block = validate(block);
 				}
 				if(!fork->is_vdf_verified) {
 					if(auto prev = find_prev_header(block)) {
@@ -1168,22 +1175,19 @@ std::shared_ptr<Node::fork_t> Node::find_best_fork(std::shared_ptr<const BlockHe
 			prev_best = best_fork;
 			curr_height = iter->first;
 		}
-		if(prev) {
-			fork->total_weight = prev->total_weight;
+		fork->score_bonus = 0;
+		if(iter != begin && prev) {
+			fork->total_weight = prev->total_weight + fork->weight;
+			// add buffer bonus if not weak proof and did not orphan previous
 			if(!prev_best || prev == prev_best || !fork->vdf_point || prev_best->recv_time > fork->vdf_point->recv_time) {
 				if(!fork->has_weak_proof) {
-					fork->total_weight += std::min<int32_t>(prev->weight_buffer, params->score_threshold);
+					fork->score_bonus = std::min<int32_t>(prev->weight_buffer, params->score_threshold);
+					fork->total_weight += uint128_t(fork->score_bonus) * fork->diff_block->time_diff * fork->diff_block->space_diff;
 				}
-				fork->total_weight += fork->weight;
-			} else {
-				fork->total_weight -= params->score_threshold;		// orphan penalty
 			}
 			fork->weight_buffer = std::min<int32_t>(std::max(prev->weight_buffer + fork->buffer_delta, 0), params->max_weight_buffer);
 		} else {
 			fork->total_weight = fork->weight;
-		}
-		if(fork->total_weight >> 127) {
-			fork->total_weight = 0;		// clamp to zero
 		}
 		if(!best_fork
 			|| fork->total_weight > max_weight

@@ -132,6 +132,7 @@ private:
 		uint32_t proof_score = -1;
 		int32_t buffer_delta = 0;
 		int32_t weight_buffer = 0;
+		int32_t score_bonus = 0;
 		int64_t recv_time = 0;
 		uint128_t weight = 0;
 		uint128_t total_weight = 0;
@@ -178,7 +179,7 @@ private:
 
 	std::vector<std::shared_ptr<fork_t>> get_fork_line(std::shared_ptr<fork_t> fork_head = nullptr) const;
 
-	void validate(std::shared_ptr<const Block> block) const;
+	std::shared_ptr<Block> validate(std::shared_ptr<const Block> block) const;
 
 	void validate(std::shared_ptr<const Transaction> tx) const;
 

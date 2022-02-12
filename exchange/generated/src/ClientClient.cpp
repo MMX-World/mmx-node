@@ -18,6 +18,8 @@
 #include <mmx/exchange/Client_get_all_offers_return.hxx>
 #include <mmx/exchange/Client_get_local_history.hxx>
 #include <mmx/exchange/Client_get_local_history_return.hxx>
+#include <mmx/exchange/Client_get_min_trade.hxx>
+#include <mmx/exchange/Client_get_min_trade_return.hxx>
 #include <mmx/exchange/Client_get_offer.hxx>
 #include <mmx/exchange/Client_get_offer_return.hxx>
 #include <mmx/exchange/Client_get_order.hxx>
@@ -303,6 +305,20 @@ std::vector<::mmx::exchange::trade_entry_t> ClientClient::get_trade_history(cons
 	}
 }
 
+::mmx::ulong_fraction_t ClientClient::get_min_trade(const std::string& server, const ::mmx::exchange::trade_pair_t& pair) {
+	auto _method = ::mmx::exchange::Client_get_min_trade::create();
+	_method->server = server;
+	_method->pair = pair;
+	auto _return_value = vnx_request(_method, false);
+	if(auto _result = std::dynamic_pointer_cast<const ::mmx::exchange::Client_get_min_trade_return>(_return_value)) {
+		return _result->_ret_0;
+	} else if(_return_value && !_return_value->is_void()) {
+		return _return_value->get_field_by_index(0).to<::mmx::ulong_fraction_t>();
+	} else {
+		throw std::logic_error("ClientClient: invalid return value");
+	}
+}
+
 ::mmx::exchange::open_order_t ClientClient::get_order(const ::mmx::txio_key_t& key) {
 	auto _method = ::mmx::exchange::Client_get_order::create();
 	_method->key = key;
@@ -377,12 +393,13 @@ void ClientClient::cancel_all_async() {
 	vnx_request(_method, true);
 }
 
-std::shared_ptr<const ::mmx::exchange::OfferBundle> ClientClient::make_offer(const uint32_t& wallet, const ::mmx::exchange::trade_pair_t& pair, const uint64_t& bid, const uint64_t& ask) {
+std::shared_ptr<const ::mmx::exchange::OfferBundle> ClientClient::make_offer(const uint32_t& wallet, const ::mmx::exchange::trade_pair_t& pair, const uint64_t& bid, const uint64_t& ask, const uint32_t& num_chunks) {
 	auto _method = ::mmx::exchange::Client_make_offer::create();
 	_method->wallet = wallet;
 	_method->pair = pair;
 	_method->bid = bid;
 	_method->ask = ask;
+	_method->num_chunks = num_chunks;
 	auto _return_value = vnx_request(_method, false);
 	if(auto _result = std::dynamic_pointer_cast<const ::mmx::exchange::Client_make_offer_return>(_return_value)) {
 		return _result->_ret_0;

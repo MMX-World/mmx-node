@@ -76,6 +76,8 @@ public:
 	
 	::mmx::ulong_fraction_t get_price(const std::string& server = "", const ::mmx::addr_t& want = ::mmx::addr_t(), const ::mmx::exchange::amount_t& have = ::mmx::exchange::amount_t());
 	
+	::mmx::ulong_fraction_t get_min_trade(const std::string& server = "", const ::mmx::exchange::trade_pair_t& pair = ::mmx::exchange::trade_pair_t());
+	
 	::mmx::exchange::open_order_t get_order(const ::mmx::txio_key_t& key = ::mmx::txio_key_t());
 	
 	std::shared_ptr<const ::mmx::exchange::OfferBundle> get_offer(const uint64_t& id = 0);
@@ -92,7 +94,7 @@ public:
 	
 	void cancel_all_async();
 	
-	std::shared_ptr<const ::mmx::exchange::OfferBundle> make_offer(const uint32_t& wallet = 0, const ::mmx::exchange::trade_pair_t& pair = ::mmx::exchange::trade_pair_t(), const uint64_t& bid = 0, const uint64_t& ask = 0);
+	std::shared_ptr<const ::mmx::exchange::OfferBundle> make_offer(const uint32_t& wallet = 0, const ::mmx::exchange::trade_pair_t& pair = ::mmx::exchange::trade_pair_t(), const uint64_t& bid = 0, const uint64_t& ask = 0, const uint32_t& num_chunks = 1);
 	
 	std::vector<::mmx::exchange::trade_order_t> make_trade(const uint32_t& wallet = 0, const ::mmx::exchange::trade_pair_t& pair = ::mmx::exchange::trade_pair_t(), const uint64_t& bid = 0, const vnx::optional<uint64_t>& ask = nullptr);
 	

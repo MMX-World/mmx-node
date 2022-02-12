@@ -9,12 +9,15 @@
 #define INCLUDE_MMX_ROUTER_H_
 
 #include <mmx/RouterBase.hxx>
+#include <mmx/ReceiveNote.hxx>
 #include <mmx/NodeAsyncClient.hxx>
 
 #include <vnx/Buffer.hpp>
 #include <vnx/Input.hpp>
 #include <vnx/Output.hpp>
 #include <vnx/ThreadPool.h>
+
+#include <random>
 
 
 namespace mmx {
@@ -61,6 +64,12 @@ protected:
 	void handle(std::shared_ptr<const ProofResponse> value);
 
 private:
+	struct send_item_t {
+		bool reliable = false;
+		hash_t hash;
+		std::shared_ptr<const vnx::Value> value;
+	};
+
 	struct peer_t : Super::peer_t {
 		bool is_synced = false;
 		bool is_blocked = false;
@@ -75,14 +84,18 @@ private:
 		node_info_t info;
 		std::string address;
 		vnx::optional<hash_t> node_id;
+		std::queue<hash_t> hash_queue;
+		std::unordered_set<hash_t> sent_hashes;
 		std::queue<std::shared_ptr<const Transaction>> tx_queue;
+		std::map<int64_t, send_item_t> send_queue;
 	};
 
 	struct hash_info_t {
-		std::vector<uint64_t> received_from;
 		bool is_valid = false;
 		bool is_rewarded = false;
 		bool did_relay = false;
+		bool did_notify = false;
+		std::vector<uint64_t> received_from;
 	};
 
 	enum sync_state_e {
@@ -114,6 +127,8 @@ private:
 		std::unordered_map<uint32_t, uint64_t> request_map;				// [request id, client]
 	};
 
+	void send();
+
 	void update();
 
 	bool process(std::shared_ptr<const Return> ret = nullptr);
@@ -142,11 +157,19 @@ private:
 
 	void on_transaction(uint64_t client, std::shared_ptr<const Transaction> tx);
 
-	void relay(uint64_t source, std::shared_ptr<const vnx::Value> msg, const std::set<node_type_e>& filter);
+	void on_recv_note(uint64_t client, std::shared_ptr<const ReceiveNote> note);
 
-	void send_to(uint64_t client, std::shared_ptr<const vnx::Value> msg, bool reliable = true);
+	void recv_notify(uint64_t source, const hash_t& msg_hash);
 
-	void send_to(std::shared_ptr<peer_t> peer, std::shared_ptr<const vnx::Value> msg, bool reliable = true);
+	void relay(uint64_t source, std::shared_ptr<const vnx::Value> msg, const hash_t& msg_hash, const std::set<node_type_e>& filter);
+
+	void broadcast(std::shared_ptr<const vnx::Value> msg, const hash_t& msg_hash, const std::set<node_type_e>& filter, bool reliable = true);
+
+	void send_to(std::vector<std::shared_ptr<peer_t>> peers, std::shared_ptr<const vnx::Value> msg, const hash_t& msg_hash, bool reliable);
+
+	bool send_to(uint64_t client, std::shared_ptr<const vnx::Value> msg, bool reliable = true);
+
+	bool send_to(std::shared_ptr<peer_t> peer, std::shared_ptr<const vnx::Value> msg, bool reliable = true);
 
 	void send_all(std::shared_ptr<const vnx::Value> msg, const std::set<node_type_e>& filter, bool reliable = true);
 
@@ -210,6 +233,8 @@ private:
 	vnx::ThreadPool* threads = nullptr;
 	std::shared_ptr<NodeAsyncClient> node;
 	std::shared_ptr<const ChainParams> params;
+
+	mutable std::default_random_engine rand_engine;
 
 	uint32_t next_request_id = 0;
 	uint32_t verified_vdf_height = 0;

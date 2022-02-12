@@ -30,8 +30,8 @@ public:
 	
 	::vnx::TopicPtr input_blocks = "node.verified_blocks";
 	int32_t trade_timeout_ms = 5000;
-	uint32_t max_history = 10000;
 	std::string node_server = "Node";
+	std::string storage_path = "exchange/server/";
 	
 	typedef ::vnx::addons::MsgServer Super;
 	
@@ -76,6 +76,7 @@ protected:
 	virtual std::vector<::mmx::exchange::order_t> get_orders(const ::mmx::exchange::trade_pair_t& pair, const int32_t& limit) const = 0;
 	virtual std::vector<::mmx::exchange::trade_entry_t> get_history(const ::mmx::exchange::trade_pair_t& pair, const int32_t& limit) const = 0;
 	virtual ::mmx::ulong_fraction_t get_price(const ::mmx::addr_t& want, const ::mmx::exchange::amount_t& have) const = 0;
+	virtual ::mmx::ulong_fraction_t get_min_trade(const ::mmx::exchange::trade_pair_t& pair) const = 0;
 	virtual void place_async(const uint64_t& client, const ::mmx::exchange::trade_pair_t& pair, const ::mmx::exchange::limit_order_t& order, const vnx::request_id_t& _request_id) const = 0;
 	void place_async_return(const vnx::request_id_t& _request_id, const std::vector<::mmx::exchange::order_t>& _ret_0) const;
 	virtual void cancel(const uint64_t& client, const std::vector<::mmx::txio_key_t>& orders) = 0;
@@ -106,8 +107,8 @@ void ServerBase::accept_generic(T& _visitor) const {
 	_visitor.type_field("max_msg_size", 11); _visitor.accept(max_msg_size);
 	_visitor.type_field("input_blocks", 12); _visitor.accept(input_blocks);
 	_visitor.type_field("trade_timeout_ms", 13); _visitor.accept(trade_timeout_ms);
-	_visitor.type_field("max_history", 14); _visitor.accept(max_history);
-	_visitor.type_field("node_server", 15); _visitor.accept(node_server);
+	_visitor.type_field("node_server", 14); _visitor.accept(node_server);
+	_visitor.type_field("storage_path", 15); _visitor.accept(storage_path);
 	_visitor.template type_end<ServerBase>(16);
 }
 

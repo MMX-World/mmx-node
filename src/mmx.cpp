@@ -190,6 +190,7 @@ int main(int argc, char** argv)
 				int num_addrs = 1;
 				vnx::read_config("$3", num_addrs);
 
+				bool is_empty = true;
 				std::vector<mmx::addr_t> nfts;
 				for(const auto& entry : wallet.get_balances(index))
 				{
@@ -203,7 +204,11 @@ int main(int argc, char** argv)
 							std::cout << " [" << entry.first << "]";
 						}
 						std::cout << std::endl;
+						is_empty = false;
 					}
+				}
+				if(is_empty) {
+					std::cout << "Balance: 0 MMX" << std::endl;
 				}
 				for(const auto& addr : nfts) {
 					std::cout << "NFT: " << addr << std::endl;
@@ -248,7 +253,7 @@ int main(int argc, char** argv)
 			{
 				for(const auto& entry : wallet.get_all_accounts()) {
 					const auto& config = entry.second;
-					std::cout << "[" << entry.first << "] name = '" << config.name << "', account = " << config.index
+					std::cout << "[" << entry.first << "] name = '" << config.name << "', index = " << config.index
 							<< ", num_addresses = " << config.num_addresses << ", key_file = '" << config.key_file << "'" << std::endl;
 				}
 			}
@@ -981,13 +986,16 @@ int main(int argc, char** argv)
 				const auto ask_token = get_token(node, pair.ask);
 
 				mmx::exchange::amount_t have;
-				have.amount = amount > 0 ? amount / pow(10, bid_token->decimals) : 1;
+				have.amount = (amount > 0 ? amount : 1) * pow(10, bid_token->decimals);
 				have.currency = pair.bid;
 				const auto price = client.get_price(server, pair.ask, have);
 				if(price.value > 0) {
 					std::cout << price.inverse / double(price.value) << " " << bid_token->symbol << " / " << ask_token->symbol << std::endl;
+					std::cout << price.value / double(price.inverse) << " " << ask_token->symbol << " / " << bid_token->symbol << std::endl;
+					std::cout << "Amount:  " << price.inverse / pow(10, bid_token->decimals) << " " << bid_token->symbol << std::endl;
+					std::cout << "Receive: " << price.value / pow(10, ask_token->decimals) << " " << ask_token->symbol << std::endl;
 				} else {
-					std::cout << "No orders available!" << std::endl;
+					std::cout << "No orders matched!" << std::endl;
 				}
 			}
 			else if(command == "cancel")
