@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.11)
 project(mmx-node C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fopenmp -Wall -Wno-unused-function")
-
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-function")
 
 set(ARITH "easy" CACHE STRING "BLS ARITH")
 set(BUILD_BLS_PYTHON_BINDINGS OFF CACHE BOOL "BUILD_BLS_PYTHON_BINDINGS")
@@ -21,6 +21,7 @@ add_subdirectory(bls-signatures)
 
 if (NOT MSVC)
 find_package(OpenCL)
+find_package(OpenMP REQUIRED)
 endif()
 
 find_package(Threads REQUIRED)
@@ -157,7 +158,6 @@ if(MSVC)
 endif()
 
 target_link_libraries(mmx_iface uint256_t secp256k1 bech32 bls vnx_addons vnx_base)
-add_subdirectory(exchange)
 target_link_libraries(mmx_modules vnx_rocksdb mmx_chiapos mmx_iface mmx_exchange)
 
 if(OpenCL_FOUND)
