@@ -4,17 +4,11 @@ IF "%MMX_HOME%"=="" (
 	SET MMX_HOME=%homedrive%%homepath%\.mmx\
 )
 
-@REM IF "%NETWORK%"=="" (
-@REM 	SET NETWORK=testnet5
-@REM )
-
 SET NETWORK=testnet5
 SET MMX_NETWORK=%NETWORK%/
 
-
 ECHO NETWORK=%MMX_NETWORK%
 ECHO MMX_HOME=%MMX_HOME%
-
 
 IF NOT EXIST "%MMX_HOME%\config\local\" (
 	XCopy "config/local_init" "%MMX_HOME%\config\local\" /S /F /Y
@@ -24,4 +18,7 @@ IF NOT EXIST "%MMX_HOME%\config\local\" (
 	REM
 )
 
-SET PATH=%PATH%;%CD%
+set MMX_ENV=%~dp0
+set MMX_ENV="%MMX_ENV:~0,-1%"
+
+SET PATH=%PATH%;%MMX_ENV%
