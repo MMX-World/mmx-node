@@ -377,8 +377,22 @@ int main(int argc, char** argv)
 					goto failed;
 				}
 				const auto txid = wallet.deploy(index, payload);
-				std::cout << "Deployed " << payload->get_type_name() << " as " << mmx::addr_t(txid) << std::endl;
+				std::cout << "Deployed " << payload->get_type_name() << " as [" << mmx::addr_t(txid) << "]" << std::endl;
 				std::cout << "Transaction ID: " << txid << std::endl;
+			}
+			else if(command == "exec")
+			{
+				std::string method;
+				vnx::Object args;
+				vnx::read_config("$3", method);
+				vnx::read_config("$4", args);
+
+				args["__type"] = method;
+				const auto txid = wallet.execute(index, contract, args);
+				std::cout << "Executed " << method << " on [" << contract << "] with:" << std::endl;
+				vnx::PrettyPrinter printer(std::cout);
+				args.accept(printer);
+				std::cout << std::endl << "Transaction ID: " << txid << std::endl;
 			}
 			else if(command == "log")
 			{
@@ -416,7 +430,7 @@ int main(int argc, char** argv)
 						<< std::endl << wallet.seed_value << std::endl;
 			}
 			else {
-				std::cerr << "Help: mmx wallet [show | log | send | send_from | transfer | mint | deploy | create | accounts]" << std::endl;
+				std::cerr << "Help: mmx wallet [show | log | send | send_from | transfer | mint | deploy | exec | create | accounts]" << std::endl;
 			}
 		}
 		else if(module == "node")

@@ -70,6 +70,7 @@ add_library(mmx_iface SHARED
 	src/BlockHeader.cpp
 	src/Transaction.cpp
 	src/Operation.cpp
+	src/Context.cpp
 	src/Contract.cpp
 	src/Solution.cpp
 	src/ProofOfTime.cpp
@@ -79,14 +80,20 @@ add_library(mmx_iface SHARED
 	src/txio_key_t.cpp
 	src/contract/NFT.cpp
 	src/contract/Data.cpp
+	src/contract/DataArray.cpp
+	src/contract/DataObject.cpp
 	src/contract/WebData.cpp
 	src/contract/PubKey.cpp
 	src/contract/MultiSig.cpp
 	src/contract/Token.cpp
 	src/contract/Staking.cpp
-	src/contract/Condition.cpp
+	src/contract/Locked.cpp
+	src/contract/PuzzleLock.cpp
+	src/contract/PlotNFT.cpp
 	src/solution/PubKey.cpp
 	src/solution/MultiSig.cpp
+	src/solution/PuzzleLock.cpp
+	src/solution/PlotNFT.cpp
 	src/operation/Mint.cpp
 	src/operation/Spend.cpp
 	src/operation/Mutate.cpp
@@ -115,6 +122,7 @@ add_library(mmx_modules SHARED
 	src/Router.cpp
 	src/WebAPI.cpp
 	src/OCL_VDF.cpp
+	src/TimeLordRewards.cpp
 )
 
 
@@ -177,6 +185,7 @@ add_executable(mmx_farmer src/mmx_farmer.cpp)
 add_executable(mmx_wallet src/mmx_wallet.cpp)
 add_executable(mmx_timelord src/mmx_timelord.cpp)
 add_executable(mmx_harvester src/mmx_harvester.cpp)
+add_executable(mmx_timelord_rewards src/mmx_timelord_rewards.cpp)
 
 if(MSVC)
 	set_target_properties(mmx PROPERTIES LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
@@ -188,6 +197,7 @@ target_link_libraries(mmx_farmer mmx_modules)
 target_link_libraries(mmx_wallet mmx_modules)
 target_link_libraries(mmx_timelord mmx_modules)
 target_link_libraries(mmx_harvester mmx_modules)
+target_link_libraries(mmx_timelord_rewards mmx_modules)
 
 add_executable(tx_bench src/tx_bench.cpp $<TARGET_OBJECTS:uint256_t>)
 
