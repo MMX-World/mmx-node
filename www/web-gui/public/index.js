@@ -283,7 +283,18 @@ const ExchangeOffers = {
 
 const Explore = {
 	template: `
-		<recent-blocks-summary :limit="30"></recent-blocks-summary>
+		<explore-menu></explore-menu>
+		<router-view></router-view>
+	`
+}
+const ExploreBlocks = {
+	template: `
+		<explore-blocks :limit="100"></explore-blocks>
+	`
+}
+const ExploreTransactions = {
+	template: `
+		<explore-transactions :limit="100"></explore-transactions>
 	`
 }
 const ExploreBlock = {
@@ -350,13 +361,21 @@ const routes = [
 			{ path: 'offers/:wallet/:server/:bid/:ask', component: ExchangeOffers, meta: { page: 'offers' } },
 		]
 	},
-	{ path: '/explore', component: Explore, meta: { is_explorer: true } },
-	{ path: '/explore/block/hash/:hash', component: ExploreBlock, meta: { is_explorer: true } },
-	{ path: '/explore/block/height/:height', component: ExploreBlock, meta: { is_explorer: true } },
-	{ path: '/explore/address/:address', component: ExploreAddress, meta: { is_explorer: true } },
-	{ path: '/explore/transaction/:id', component: ExploreTransaction, meta: { is_explorer: true } },
-	{ path: '/explore/address/coins/:address/:currency', component: AddressCoins, meta: { is_explorer: true },
-		props: route => ({address: route.params.address, currency: route.params.currency})
+	{ path: '/explore',
+		component: Explore,
+		redirect: "/explore/blocks",
+		meta: { is_explorer: true },
+		children: [
+			{ path: 'blocks', component: ExploreBlocks, meta: { page: 'blocks' } },
+			{ path: 'transactions', component: ExploreTransactions, meta: { page: 'transactions' } },
+			{ path: 'block/hash/:hash', component: ExploreBlock, meta: { page: 'block' } },
+			{ path: 'block/height/:height', component: ExploreBlock, meta: { page: 'block' } },
+			{ path: 'address/:address', component: ExploreAddress, meta: { page: 'address' } },
+			{ path: 'transaction/:id', component: ExploreTransaction, meta: { page: 'transaction' } },
+			{ path: 'address/coins/:address/:currency', component: AddressCoins, meta: { page: 'address_coins' },
+				props: route => ({address: route.params.address, currency: route.params.currency})
+			},
+		]
 	},
 	{ path: '/settings', component: Settings },
 ]
