@@ -1,4 +1,5 @@
 @ECHO OFF
+
 CALL .\activate.cmd
 
-.\mmx_node.exe -c config\%MMX_NETWORK% config\node\ %MMX_HOME%config\local\ %*
+mmx_node -c config\%NETWORK%\ config\node\ %MMX_HOME%\config\local\ %*
