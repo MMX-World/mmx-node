@@ -32,6 +32,9 @@ std::shared_ptr<Block> Node::validate(std::shared_ptr<const Block> block) const
 	if(block->time_diff == 0 || block->space_diff == 0) {
 		throw std::logic_error("invalid difficulty");
 	}
+	if(block->tx_count != block->tx_list.size()) {
+		throw std::logic_error("invalid tx_count");
+	}
 	if(auto proof = block->proof) {
 		if(!block->farmer_sig || !block->farmer_sig->verify(proof->farmer_key, block->hash)) {
 			throw std::logic_error("invalid farmer signature");
@@ -90,7 +93,7 @@ std::shared_ptr<Block> Node::validate(std::shared_ptr<const Block> block) const
 	std::atomic<uint64_t> total_cost {0};
 
 #pragma omp parallel for
-	for(int32_t i = 0; i < out->tx_list.size(); ++i)
+	for(int i = 0; i < int(out->tx_list.size()); ++i)
 	{
 		auto& base = out->tx_list[i];
 		try {

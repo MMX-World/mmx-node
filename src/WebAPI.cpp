@@ -654,6 +654,18 @@ void WebAPI::render_block_graph(const vnx::request_id_t& request_id, size_t limi
 					out["tx_count"] = block->tx_count;
 					out["netspace"] = double(calc_total_netspace(params, block->space_diff)) * pow(1000, -5);
 					out["vdf_speed"] = double(block->time_diff) / params->time_diff_constant / params->block_time;
+					if(auto proof = block->proof) {
+						out["score"] = proof->score;
+					} else {
+						out["score"] = nullptr;
+					}
+					uint64_t total = 0;
+					if(auto tx = std::dynamic_pointer_cast<const Transaction>(block->tx_base)) {
+						for(const auto& out : tx->outputs) {
+							total += out.amount;
+						}
+					}
+					out["reward"] = total / pow(10, params->decimals);
 				}
 				if(--job->num_left == 0) {
 					respond(job->request_id, render_value(job->result));
@@ -1467,9 +1479,13 @@ void WebAPI::http_request_async(std::shared_ptr<const vnx::addons::HttpRequest> 
 					get_context(addr_set, request_id,
 						[this, request_id, pairs](std::shared_ptr<RenderContext> context) {
 							std::vector<exchange::trade_pair_t> res;
+							const std::set<exchange::trade_pair_t> set(pairs.begin(), pairs.end());
 							for(const auto& pair : pairs) {
 								res.push_back(pair);
-								res.push_back(pair.reverse());
+								const auto other = pair.reverse();
+								if(!set.count(other)) {
+									res.push_back(other);
+								}
 							}
 							std::sort(res.begin(), res.end());
 							respond(request_id, render_value(res, context));
